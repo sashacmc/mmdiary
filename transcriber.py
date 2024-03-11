@@ -70,6 +70,8 @@ class Transcriber(object):
             "caption": self.extract_caption(text),
             "text": text,
             "model": self.__modelname,
+            "type": "audio",
+            "source": os.path.split(file)[1],
             "duration": self.duration(res),
             "recordtime": prop.time().strftime(TIME_OUT_FORMAT) if prop.time() is not None else "",
             "processtime": datetime.now().strftime(TIME_OUT_FORMAT),
