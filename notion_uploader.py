@@ -3,13 +3,16 @@
 import os
 import sys
 import logging
+import progressbar
+import argparse
 import log
 import json
 import time
 import re
+import uuid
 
 from notion.client import NotionClient
-from notion.block import PageBlock, AudioBlock, TextBlock, CalloutBlock
+from notion.block import PageBlock, AudioBlock, TextBlock, CalloutBlock, ToggleBlock
 
 DIR = "/mnt/multimedia/NEW/Audio/"
 URL = "https://mediahome.bushnev.pro/audio-notes/"
@@ -21,10 +24,11 @@ DAY_REGEX = r'^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2][0-9]|3[0-1])$'
 
 
 class NotionStructure(object):
-    def __init__(self, notion, root_page_id):
+    def __init__(self, notion, root_page_id, dry_run=False):
         self.__notion = notion
         self.__root_page_id = root_page_id
         self.__pages = self.load()
+        self.__dry_run = dry_run
 
     def get_children(self, page_id):
         all_children = self.__notion.get_block(page_id).children
@@ -56,6 +60,11 @@ class NotionStructure(object):
         return res
 
     def create_page(self, page_id, before_id, title):
+        if self.__dry_run:
+            rid = uuid.uuid1()
+            self.__pages[title] = rid
+            return rid
+
         parent = self.__notion.get_block(page_id)
         res = parent.children.add_new(PageBlock, title=title, icon="🗓️")
 
@@ -114,10 +123,11 @@ class NotionStructure(object):
 
 
 class NotionUploader(object):
-    def __init__(self, token, root_page_id):
-        self.__notion = NotionClient(token_v2=token)
-        self.__structure = NotionStructure(self.__notion, root_page_id)
+    def __init__(self, token, root_page_id, dry_run=False):
+        self.__notion = NotionClient(token_v2=token, enable_caching=True)
+        self.__structure = NotionStructure(self.__notion, root_page_id, dry_run)
         self.__root_page_id = root_page_id
+        self.__dry_run = dry_run
 
     def split_large_text(self, text):
         block_len = 0
@@ -139,6 +149,10 @@ class NotionUploader(object):
         return blocks
 
     def create_page(self, data, url):
+        if self.__dry_run:
+            rid = uuid.uuid1()
+            return rid
+
         parent_id = self.__structure.get_day_page_id(data["recordtime"][:10])
         parent = self.__notion.get_block(parent_id)
 
@@ -146,10 +160,17 @@ class NotionUploader(object):
 
         res.children.add_new(CalloutBlock, title=data["recordtime"], icon="📅", color="gray_background")
 
-        res.children.add_new(AudioBlock, source=url)
+        # res.children.add_new(AudioBlock, source=url)
+        audio = res.children.add_new(AudioBlock)
+        audio.upload_file(url)
 
         for block in self.split_large_text(data["text"]):
             res.children.add_new(TextBlock, title=block)
+
+        tg = res.children.add_new(ToggleBlock, title="_", color="gray")
+        info = "source=" + data["source"] + "\n"
+        info += "processtime=" + data["processtime"]
+        tg.children.add_new(TextBlock, title=info, color="gray")
 
         res.set("format.block_locked", True)
 
@@ -161,14 +182,14 @@ class NotionUploader(object):
 
     def get_url(self, in_file, src_file):
         orig_file = os.path.join(os.path.dirname(in_file), src_file)
-        return orig_file.replace(DIR, URL)
+        return orig_file  # .replace(DIR, URL)
 
     def process(self, file):
         logging.info(f"Process file: {file}")
 
         if DIR not in file:
             logging.info(f"File outside of main tree, skipped")
-            return
+            # return
 
         data = self.load_json(file)
 
@@ -178,27 +199,59 @@ class NotionUploader(object):
         logging.info(f"Saved: {res}")
 
 
-if __name__ == "__main__":
-    log.initLogger()
-    in_file = sys.argv[1]
+def args_parse():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('in_path', help='Input path')
+    parser.add_argument('-l', '--logfile', help='Log file', default='log.txt')
+    parser.add_argument('-d', '--dryrun', help='Dry run', action='store_true')
+    return parser.parse_args()
+
+
+def main():
+    args = args_parse()
+
+    log.initLogger(args.logfile, level=logging.DEBUG)
 
     token = os.getenv("NOTION_TOKEN")
     page_id = "c1d9a8f5ed024019969ff36c841063df"
-    nup = NotionUploader(token, page_id)
+    nup = NotionUploader(token, page_id, args.dryrun)
 
     fileslist = []
-    if os.path.isfile(in_file):
-        nup.process(in_file)
-    elif os.path.isdir(in_file):
-        for dirpath, dirs, files in os.walk(in_file):
+    if os.path.isfile(args.in_path):
+        nup.process(args.in_path)
+    elif os.path.isdir(args.in_path):
+        for dirpath, dirs, files in os.walk(args.in_path):
             for filename in files:
                 if os.path.splitext(filename)[1] == ".json":
                     fname = os.path.join(dirpath, filename)
                     fileslist.append(fname)
 
-    logging.info(f"{len(fileslist)} files found")
+    count = len(fileslist)
+    logging.info(f"{count} files found")
+
+    pbar = progressbar.ProgressBar(
+        maxval=count,
+        widgets=[
+            "Uploading",
+            ' ',
+            progressbar.Percentage(),
+            ' ',
+            progressbar.Bar(),
+            ' ',
+            progressbar.ETA(),
+        ],
+    ).start()
 
     for fname in fileslist:
-        nup.process(fname)
+        try:
+            nup.process(fname)
+        except Exception:
+            logging.exception("Notion uploader failed")
+        pbar.increment()
 
+    pbar.finish()
     logging.info(f"Done.")
+
+
+if __name__ == '__main__':
+    main()
