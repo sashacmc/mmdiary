@@ -10,124 +10,45 @@ import json
 import time
 import re
 import uuid
+from datetime import datetime
 
 from notion.client import NotionClient
 from notion.block import PageBlock, AudioBlock, TextBlock, CalloutBlock, ToggleBlock
+from notion.collection import NotionDate
 
-DIR = "/mnt/multimedia/NEW/Audio/"
-URL = "https://mediahome.bushnev.pro/audio-notes/"
 MAX_TEXT_SIZE = 2000
-
-YEAR_REGEX = r'^\d{4}$'
-MONTH_REGEX = r'^\d{4}-(0[1-9]|1[0-2])$'
-DAY_REGEX = r'^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2][0-9]|3[0-1])$'
-
-
-class NotionStructure(object):
-    def __init__(self, notion, root_page_id, dry_run=False):
-        self.__notion = notion
-        self.__root_page_id = root_page_id
-        self.__pages = self.load()
-        self.__dry_run = dry_run
-
-    def get_children(self, page_id):
-        all_children = self.__notion.get_block(page_id).children
-        pages = filter(lambda ch: ch.type == "page", all_children)
-        return [(p.title, p.id) for p in pages]
-
-    def get_date_pages(self, page_id):
-        res = {}
-        pages = self.get_children(page_id)
-        for title, pid in pages:
-            if re.match(YEAR_REGEX, title):
-                res[title] = pid
-                res.update(self.get_date_pages(pid))
-            elif re.match(MONTH_REGEX, title):
-                res[title] = pid
-                res.update(self.get_date_pages(pid))
-            elif re.match(DAY_REGEX, title):
-                res[title] = pid
-        return res
-
-    def load(self):
-        return self.get_date_pages(self.__root_page_id)
-
-    def children_pages_count(self, block):
-        res = 0
-        for ch in block.children:
-            if ch.type == "page":
-                res += 1
-        return res
-
-    def create_page(self, page_id, before_id, title):
-        if self.__dry_run:
-            rid = uuid.uuid1()
-            self.__pages[title] = rid
-            return rid
-
-        parent = self.__notion.get_block(page_id)
-        res = parent.children.add_new(PageBlock, title=title, icon="🗓️")
-
-        if self.children_pages_count(parent) > 1:
-            if before_id is None:
-                res.move_to(parent, "first-child")
-            else:
-                sibling = self.__notion.get_block(before_id)
-                res.move_to(sibling, "after")
-
-        res.set("format.block_locked", True)
-
-        self.__pages[title] = res.id
-
-        return res.id
-
-    def find_before_page_id(self, date_str):
-        prefix = date_str[:-2]
-        num = int(date_str[-2:]) - 1
-        while num != 0:
-            before = f"{prefix}{num:02}"
-            before_id = self.__pages.get(before, None)
-            if before_id != None:
-                return before_id
-            num -= 1
-        return None
-
-    def get_day_page_id(self, date_str):
-        if not re.match(DAY_REGEX, date_str):
-            raise Exception(f"Incorrect date: {date_str}")
-        if date_str in self.__pages:
-            return self.__pages[date_str]
-        else:
-            page_id = self.get_month_page_id(date_str[:-3])
-            before_id = self.find_before_page_id(date_str)
-            return self.create_page(page_id, before_id, date_str)
-
-    def get_month_page_id(self, date_str):
-        if not re.match(MONTH_REGEX, date_str):
-            raise Exception(f"Incorrect month: {date_str}")
-        if date_str in self.__pages:
-            return self.__pages[date_str]
-        else:
-            page_id = self.get_year_page_id(date_str[:-3])
-            before_id = self.find_before_page_id(date_str)
-            return self.create_page(page_id, before_id, date_str)
-
-    def get_year_page_id(self, date_str):
-        if not re.match(YEAR_REGEX, date_str):
-            raise Exception(f"Incorrect year: {date_str}")
-        if date_str in self.__pages:
-            return self.__pages[date_str]
-        else:
-            before_id = self.find_before_page_id(date_str)
-            return self.create_page(self.__root_page_id, before_id, date_str)
+JSON_EXT = ".json"
 
 
 class NotionUploader(object):
-    def __init__(self, token, root_page_id, dry_run=False):
-        self.__notion = NotionClient(token_v2=token, enable_caching=True)
-        self.__structure = NotionStructure(self.__notion, root_page_id, dry_run)
-        self.__root_page_id = root_page_id
+    def __init__(self, token, collection_view_url, force_update=False, dry_run=False):
         self.__dry_run = dry_run
+        self.__force_update = force_update
+        self.__notion = NotionClient(token_v2=token, enable_caching=False)
+
+        cv = self.__notion.get_collection_view(collection_view_url)
+        self.__collection = cv.collection
+
+        self.init_existing_pages()
+
+    def init_existing_pages(self):
+        self.__existing_pages = {}
+        duplicate = False
+        for r in self.__collection.get_rows(limit=10000000):
+            if not self.add_existing_page(r.source, r.processtime, r.id, update=False):
+                duplicate = True
+        if duplicate:
+            raise Exception("Duplicate items in collection")
+        logging.info(f"Found existing {len(self.__existing_pages)} items")
+
+    def add_existing_page(self, sourse, processtime, bid, update=True):
+        if not update:
+            if sourse in self.__existing_pages:
+                logging.warn(f"Duplicate item: {sourse}: {bid}")
+                return False
+
+        self.__existing_pages[sourse] = (processtime, bid)
+        return True
 
     def split_large_text(self, text):
         block_len = 0
@@ -148,29 +69,53 @@ class NotionUploader(object):
 
         return blocks
 
-    def create_page(self, data, url):
+    def str_to_notion_date(self, s):
+        return NotionDate(datetime.strptime(s[:10], "%Y-%m-%d").date())
+
+    def delete_page(self, bid):
+        logging.debug(f"remove block {bid}")
+        block = self.__notion.get_block(bid)
+        block.remove()
+
+    def check_existing(self, source, processtime):
+        page = self.__existing_pages.get(source, None)
+        logging.debug(f"check_existing: {source}: {page}")
+        if page is None:
+            return False
+
+        if page[0] != processtime:
+            logging.info(f"processtime changed: {page[0]} != {processtime} for {source}")
+            self.delete_page(page[1])
+            return False
+
+        if self.__force_update:
+            logging.info(f"force update for {source}")
+            self.delete_page(page[1])
+            return False
+
+        return True
+
+    def create_page(self, data, fname):
         if self.__dry_run:
             rid = uuid.uuid1()
             return rid
 
-        parent_id = self.__structure.get_day_page_id(data["recordtime"][:10])
-        parent = self.__notion.get_block(parent_id)
-
-        res = parent.children.add_new(PageBlock, title=data["caption"], icon="🎙️")
+        res = self.__collection.add_row(
+            title=data["caption"],
+            date=self.str_to_notion_date(data["recordtime"]),
+            source=data["source"],
+            processtime=data["processtime"],
+            icon="🎙️",
+        )
 
         res.children.add_new(CalloutBlock, title=data["recordtime"], icon="📅", color="gray_background")
 
-        # res.children.add_new(AudioBlock, source=url)
         audio = res.children.add_new(AudioBlock)
-        audio.upload_file(url)
+        info = audio.upload_file(fname)
+        logging.debug(f"Audio uploaded: {info}")
 
         for block in self.split_large_text(data["text"]):
             res.children.add_new(TextBlock, title=block)
-
-        tg = res.children.add_new(ToggleBlock, title="_", color="gray")
-        info = "source=" + data["source"] + "\n"
-        info += "processtime=" + data["processtime"]
-        tg.children.add_new(TextBlock, title=info, color="gray")
 
         res.set("format.block_locked", True)
 
@@ -180,29 +125,46 @@ class NotionUploader(object):
         with open(file, "r") as f:
             return json.load(f)
 
-    def get_url(self, in_file, src_file):
-        orig_file = os.path.join(os.path.dirname(in_file), src_file)
-        return orig_file  # .replace(DIR, URL)
+    def get_source_file(self, in_file, src_file):
+        return os.path.join(os.path.dirname(in_file), src_file)
 
     def process(self, file):
         logging.info(f"Process file: {file}")
 
-        if DIR not in file:
-            logging.info(f"File outside of main tree, skipped")
-            # return
-
         data = self.load_json(file)
 
-        url = self.get_url(file, data["source"])
-        res = self.create_page(data, url)
+        if self.check_existing(data["source"], data["processtime"]):
+            logging.debug(f"skip existing")
+            return
 
+        fname = self.get_source_file(file, data["source"])
+        res = self.create_page(data, fname)
+
+        self.add_existing_page(data["source"], data["processtime"], res)
         logging.info(f"Saved: {res}")
+
+
+def __on_walk_error(err):
+    logging.error('Scan files error: %s' % err)
+
+
+def __scan_files(inpath):
+    res = []
+    for root, dirs, files in os.walk(inpath, onerror=__on_walk_error):
+        for fname in files:
+            if os.path.splitext(fname)[1] == JSON_EXT:
+                res.append(os.path.join(root, fname))
+
+    res.sort()
+    logging.info(f"Found {len(res)} files")
+    return res
 
 
 def args_parse():
     parser = argparse.ArgumentParser()
-    parser.add_argument('in_path', help='Input path')
-    parser.add_argument('-l', '--logfile', help='Log file', default='log.txt')
+    parser.add_argument('inpath', help='Input path')
+    parser.add_argument('-l', '--logfile', help='Log file', default=None)
+    parser.add_argument('-f', '--force', help='Force update', action='store_true')
     parser.add_argument('-d', '--dryrun', help='Dry run', action='store_true')
     return parser.parse_args()
 
@@ -213,24 +175,20 @@ def main():
     log.initLogger(args.logfile, level=logging.DEBUG)
 
     token = os.getenv("NOTION_TOKEN")
-    page_id = "c1d9a8f5ed024019969ff36c841063df"
-    nup = NotionUploader(token, page_id, args.dryrun)
+    collection_view_url = os.getenv("NOTION_COLLECTION_VIEW")
+    nup = NotionUploader(token, collection_view_url, force_update=args.force, dry_run=args.dryrun)
 
     fileslist = []
-    if os.path.isfile(args.in_path):
-        nup.process(args.in_path)
-    elif os.path.isdir(args.in_path):
-        for dirpath, dirs, files in os.walk(args.in_path):
-            for filename in files:
-                if os.path.splitext(filename)[1] == ".json":
-                    fname = os.path.join(dirpath, filename)
-                    fileslist.append(fname)
+    if os.path.isfile(args.inpath):
+        fileslist = (args.inpath,)
+    elif os.path.isdir(args.inpath):
+        fileslist = __scan_files(args.inpath)
 
-    count = len(fileslist)
-    logging.info(f"{count} files found")
+    if len(fileslist) == 0:
+        return
 
     pbar = progressbar.ProgressBar(
-        maxval=count,
+        maxval=len(fileslist),
         widgets=[
             "Uploading",
             ' ',
@@ -254,4 +212,7 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except Exception:
+        logging.exception("Main failed")
