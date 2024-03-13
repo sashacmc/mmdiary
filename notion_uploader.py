@@ -14,7 +14,7 @@ from datetime import datetime
 
 from notion.client import NotionClient
 from notion.block import PageBlock, AudioBlock, TextBlock, CalloutBlock, ToggleBlock
-from notion.collection import NotionDate
+from notion.collection import NotionDate, CollectionRowBlock
 
 MAX_TEXT_SIZE = 2000
 JSON_EXT = ".json"
@@ -75,7 +75,10 @@ class NotionUploader(object):
     def delete_page(self, bid):
         logging.debug(f"remove block {bid}")
         block = self.__notion.get_block(bid)
-        block.remove()
+        if type(block) is CollectionRowBlock:
+            block.remove()
+        else:
+            block.remove(permanently=True)
 
     def check_existing(self, source, processtime):
         page = self.__existing_pages.get(source, None)

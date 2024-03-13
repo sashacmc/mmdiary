@@ -4,6 +4,7 @@ import os
 import log
 import logging
 from notion.client import NotionClient
+from notion.collection import CollectionRowBlock
 
 
 def get_trash(client):
@@ -38,7 +39,11 @@ def delete_block(client, block_ids):
     for bid in block_ids:
         try:
             block = client.get_block(bid)
-            block.remove(permanently=True)
+            if type(block) is CollectionRowBlock:
+                block.remove()
+            else:
+                block.remove(permanently=True)
+
             logging.info(f"Done: {bid}")
             cnt += 1
         except Exception as err:
