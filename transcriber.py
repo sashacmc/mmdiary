@@ -1,18 +1,19 @@
 #!/usr/bin/python3
 
+import argparse
 import whisper
 import os
-import sys
 import logging
 import log
 import json
-import time
+import progressbar
 
 from photo_importer import fileprop
 from photo_importer import config as pi_config
 from datetime import datetime
 
 TIME_OUT_FORMAT = "%Y-%m-%d %H:%M:%S"
+JSON_EXT = ".json"
 
 
 class Transcriber(object):
@@ -53,14 +54,20 @@ class Transcriber(object):
             json.dump(cont, f, ensure_ascii=False, indent=2)
 
     def get_out_filename(self, in_file):
-        return os.path.splitext(in_file)[0] + ".json"
+        return os.path.splitext(in_file)[0] + JSON_EXT
 
-    def process(self, file):
+    def process(self, file, overwrite_exiting=False):
         logging.info(f"Process file: {file}")
+
+        out_file = self.get_out_filename(file)
+        if not overwrite_exiting:
+            if os.path.isfile(out_file):
+                logging.info("Already processed, skip")
+                return
 
         prop = self.__fileprop.get(file)
         if prop.type() != fileprop.AUDIO:
-            logging.info(f"Not audio file, skip")
+            logging.info("Not audio file, skip")
             return
 
         res = self.transcribe(file)
@@ -77,22 +84,76 @@ class Transcriber(object):
             "processtime": datetime.now().strftime(TIME_OUT_FORMAT),
         }
 
-        out_file = self.get_out_filename(file)
         self.save_json(cont, out_file)
 
         logging.info(f"Saved to: {out_file}")
 
 
-if __name__ == "__main__":
-    log.initLogger()
-    in_file = sys.argv[1]
+def __on_walk_error(err):
+    logging.error('Scan files error: %s' % err)
+
+
+def __scan_files(inpath):
+    res = []
+    for root, dirs, files in os.walk(inpath, onerror=__on_walk_error):
+        for fname in files:
+            if os.path.splitext(fname)[1] != JSON_EXT:
+                res.append(os.path.join(root, fname))
+
+    res.sort()
+    logging.info(f"Found {len(res)} files")
+    return res
+
+
+def __args_parse():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('inpath', help='Input path')
+    parser.add_argument('-l', '--logfile', help='Log file', default=None)
+    parser.add_argument('-u', '--update', help='Update existing', action='store_true')
+    return parser.parse_args()
+
+
+def main():
+    args = __args_parse()
+    log.initLogger(args.logfile)
+
+    fileslist = []
+    if os.path.isfile(args.inpath):
+        fileslist = (args.inpath,)
+    elif os.path.isdir(args.inpath):
+        fileslist = __scan_files(args.inpath)
+
+    if len(fileslist) == 0:
+        return
+
+    pbar = progressbar.ProgressBar(
+        maxval=len(fileslist),
+        widgets=[
+            "Transcribe",
+            ' ',
+            progressbar.Percentage(),
+            ' ',
+            progressbar.Bar(),
+            ' ',
+            progressbar.ETA(),
+        ],
+    ).start()
 
     tr = Transcriber("medium")
 
-    if os.path.isfile(in_file):
-        tr.process(in_file)
-    elif os.path.isdir(in_file):
-        for dirpath, dirs, files in os.walk(in_file):
-            for filename in files:
-                fname = os.path.join(dirpath, filename)
-                tr.process(fname)
+    for fname in fileslist:
+        try:
+            tr.process(fname, args.update)
+        except Exception:
+            logging.exception("Transcribe failed")
+        pbar.increment()
+
+    pbar.finish()
+    logging.info("Done.")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception:
+        logging.exception("Main failed")
