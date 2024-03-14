@@ -1,19 +1,20 @@
 #!/usr/bin/python3
 
 import os
-import sys
 import logging
 import progressbar
 import argparse
 import log
 import json
-import time
-import re
 import uuid
 from datetime import datetime
 
 from notion.client import NotionClient
-from notion.block import PageBlock, AudioBlock, TextBlock, CalloutBlock, ToggleBlock
+from notion.block import (
+    AudioBlock,
+    TextBlock,
+    CalloutBlock,
+)
 from notion.collection import NotionDate, CollectionRowBlock
 
 MAX_TEXT_SIZE = 2000
@@ -21,25 +22,42 @@ JSON_EXT = ".json"
 
 
 class NotionUploader(object):
-    def __init__(self, token, collection_view_url, force_update=False, dry_run=False):
+    def __init__(
+        self, token, collection_view_url, force_update=False, dry_run=False
+    ):
+        self.__status = {
+            "total": 0,
+            "processed": 0,
+            "removed": 0,
+            "created": 0,
+            "failed": 0,
+            "skipped": 0,
+        }
         self.__dry_run = dry_run
         self.__force_update = force_update
-        self.__notion = NotionClient(token_v2=token, enable_caching=False)
+        self.__notion = NotionClient(token_v2=token, enable_caching=True)
 
         cv = self.__notion.get_collection_view(collection_view_url)
         self.__collection = cv.collection
 
         self.init_existing_pages()
 
+    def status(self):
+        return self.__status
+
     def init_existing_pages(self):
         self.__existing_pages = {}
         duplicate = False
         for r in self.__collection.get_rows(limit=10000000):
-            if not self.add_existing_page(r.source, r.processtime, r.id, update=False):
+            if not self.add_existing_page(
+                r.source, r.processtime, r.id, update=False
+            ):
                 duplicate = True
         if duplicate:
             raise Exception("Duplicate items in collection")
-        logging.info(f"Found existing {len(self.__existing_pages)} items")
+        cnt = len(self.__existing_pages)
+        self.__status["existing_init"] = cnt
+        logging.info(f"Found existing {cnt} items")
 
     def add_existing_page(self, sourse, processtime, bid, update=True):
         if not update:
@@ -48,6 +66,7 @@ class NotionUploader(object):
                 return False
 
         self.__existing_pages[sourse] = (processtime, bid)
+        self.__status["existing"] = len(self.__existing_pages)
         return True
 
     def split_large_text(self, text):
@@ -79,6 +98,7 @@ class NotionUploader(object):
             block.remove()
         else:
             block.remove(permanently=True)
+        self.__status["removed"] += 1
 
     def check_existing(self, source, processtime):
         page = self.__existing_pages.get(source, None)
@@ -87,7 +107,9 @@ class NotionUploader(object):
             return False
 
         if page[0] != processtime:
-            logging.info(f"processtime changed: {page[0]} != {processtime} for {source}")
+            logging.info(
+                f"processtime changed: {page[0]} != {processtime} for {source}"
+            )
             self.delete_page(page[1])
             return False
 
@@ -111,7 +133,12 @@ class NotionUploader(object):
             icon="🎙️",
         )
 
-        res.children.add_new(CalloutBlock, title=data["recordtime"], icon="📅", color="gray_background")
+        res.children.add_new(
+            CalloutBlock,
+            title=data["recordtime"],
+            icon="📅",
+            color="gray_background",
+        )
 
         audio = res.children.add_new(AudioBlock)
         info = audio.upload_file(fname)
@@ -121,6 +148,8 @@ class NotionUploader(object):
             res.children.add_new(TextBlock, title=block)
 
         res.set("format.block_locked", True)
+
+        self.__status["created"] += 1
 
         return res.id
 
@@ -133,11 +162,13 @@ class NotionUploader(object):
 
     def process(self, file):
         logging.info(f"Process file: {file}")
+        self.__status["processed"] += 1
 
         data = self.load_json(file)
 
         if self.check_existing(data["source"], data["processtime"]):
-            logging.debug(f"skip existing")
+            logging.debug("skip existing")
+            self.__status["skipped"] += 1
             return
 
         fname = self.get_source_file(file, data["source"])
@@ -145,6 +176,31 @@ class NotionUploader(object):
 
         self.add_existing_page(data["source"], data["processtime"], res)
         logging.info(f"Saved: {res}")
+
+    def process_list(self, fileslist):
+        self.__status["total"] = len(fileslist)
+        pbar = progressbar.ProgressBar(
+            maxval=len(fileslist),
+            widgets=[
+                "Uploading",
+                ' ',
+                progressbar.Percentage(),
+                ' ',
+                progressbar.Bar(),
+                ' ',
+                progressbar.ETA(),
+            ],
+        ).start()
+
+        for fname in fileslist:
+            try:
+                self.process(fname)
+            except Exception:
+                self.__status["failed"] += 1
+                logging.exception("Notion uploader failed")
+            pbar.increment()
+
+        pbar.finish()
 
 
 def __on_walk_error(err):
@@ -167,7 +223,9 @@ def args_parse():
     parser = argparse.ArgumentParser()
     parser.add_argument('inpath', help='Input path')
     parser.add_argument('-l', '--logfile', help='Log file', default=None)
-    parser.add_argument('-f', '--force', help='Force update', action='store_true')
+    parser.add_argument(
+        '-f', '--force', help='Force update', action='store_true'
+    )
     parser.add_argument('-d', '--dryrun', help='Dry run', action='store_true')
     return parser.parse_args()
 
@@ -179,7 +237,6 @@ def main():
 
     token = os.getenv("NOTION_TOKEN")
     collection_view_url = os.getenv("NOTION_COLLECTION_VIEW")
-    nup = NotionUploader(token, collection_view_url, force_update=args.force, dry_run=args.dryrun)
 
     fileslist = []
     if os.path.isfile(args.inpath):
@@ -188,30 +245,18 @@ def main():
         fileslist = __scan_files(args.inpath)
 
     if len(fileslist) == 0:
+        logging.info("Nothing to do, exit")
         return
 
-    pbar = progressbar.ProgressBar(
-        maxval=len(fileslist),
-        widgets=[
-            "Uploading",
-            ' ',
-            progressbar.Percentage(),
-            ' ',
-            progressbar.Bar(),
-            ' ',
-            progressbar.ETA(),
-        ],
-    ).start()
+    nup = NotionUploader(
+        token,
+        collection_view_url,
+        force_update=args.force,
+        dry_run=args.dryrun,
+    )
+    nup.process_list(fileslist)
 
-    for fname in fileslist:
-        try:
-            nup.process(fname)
-        except Exception:
-            logging.exception("Notion uploader failed")
-        pbar.increment()
-
-    pbar.finish()
-    logging.info(f"Done.")
+    logging.info(f"Done: {nup.status()}")
 
 
 if __name__ == '__main__':
