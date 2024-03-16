@@ -11,6 +11,9 @@ import cachedb
 
 from datetime import datetime
 
+from notion_client import Client
+from notion_client.helpers import iterate_paginated_api
+
 from notion.client import NotionClient
 from notion.block import (
     AudioBlock,
@@ -26,7 +29,7 @@ CACHE_DB_FILE = "~/.notion_upload.sqlite3"
 
 class NotionUploader(object):
     def __init__(
-        self, token, collection_view_url, force_update=False, dry_run=False
+        self, token, api_key, database_id, force_update=False, dry_run=False
     ):
         self.__status = {
             "total": 0,
@@ -42,25 +45,38 @@ class NotionUploader(object):
         self.__force_update = force_update
         self.__notion = NotionClient(token_v2=token, enable_caching=False)
 
-        cv = self.__notion.get_collection_view(collection_view_url)
-        self.__collection = cv.collection
+        self.__database_id = database_id
+        self.__notion_api = Client(auth=api_key)
 
         self.init_existing_pages()
 
     def status(self):
         return self.__status
 
+    def get_prop(self, row, name):
+        return row["properties"][name]["rich_text"][0]["plain_text"]
+
     def init_existing_pages(self):
         cnt = len(self.__cache.list_existing_pages())
         if cnt == 0:
             logging.info("Cache empty, init...")
             duplicate = False
-            for r in self.__collection.get_rows(limit=10000000):
-                if self.__cache.check_existing_pages(r.source) is not None:
-                    logging.warn(f"Duplicate item: {r.source}: {r.id}")
+
+            res = iterate_paginated_api(
+                self.__notion_api.databases.query,
+                database_id=self.__database_id,
+            )
+
+            for r in res:
+                source = self.get_prop(r, "source")
+                processtime = self.get_prop(r, "processtime")
+                rid = r["id"]
+                if self.__cache.check_existing_pages(source) is not None:
+                    logging.warn(f"Duplicate item: {source}: {rid}")
                     duplicate = True
-                self.__cache.add_existing_page(r.source, r.processtime, r.id)
+                self.__cache.add_existing_page(source, processtime, rid)
             if duplicate:
+                self.__cache.clean_existing_pages()
                 raise Exception("Duplicate items in collection")
 
         cnt = len(self.__cache.list_existing_pages())
@@ -124,19 +140,52 @@ class NotionUploader(object):
 
         return True
 
+    def add_row(self, title, date, source, processtime, icon):
+        properties = {
+            "title": {"title": [{"text": {"content": title}}]},
+            "Date": {"type": "date", "date": {"start": date}},
+            "source": {
+                "type": "rich_text",
+                "rich_text": [
+                    {
+                        "type": "text",
+                        "text": {"content": source},
+                    },
+                ],
+            },
+            "processtime": {
+                "type": "rich_text",
+                "rich_text": [
+                    {
+                        "type": "text",
+                        "text": {"content": processtime},
+                    },
+                ],
+            },
+        }
+
+        res = self.__notion_api.pages.create(
+            parent={"database_id": self.__database_id},
+            icon={"type": "emoji", "emoji": icon},
+            properties=properties,
+        )
+
+        return res["id"]
+
     def create_page(self, data, fname):
         if self.__dry_run:
             rid = uuid.uuid1()
             return rid
 
-        res = self.__collection.add_row(
+        bid = self.add_row(
             title=data["caption"],
-            date=self.str_to_notion_date(data["recordtime"]),
+            date=data["recordtime"][:10],
             source=data["source"],
             processtime=data["processtime"],
             icon="🎙️",
         )
         try:
+            res = self.__notion.get_block(bid)
             res.children.add_new(
                 CalloutBlock,
                 title=data["recordtime"],
@@ -154,7 +203,7 @@ class NotionUploader(object):
             res.set("format.block_locked", True)
         except Exception:
             logging.warn(f"Delete uncompleate page for: {fname}")
-            self.delete_page(res.id)
+            self.delete_page(bid)
             raise
 
         self.__status["created"] += 1
@@ -250,7 +299,8 @@ def main():
     log.initLogger(args.logfile, level=logging.DEBUG)
 
     token = os.getenv("NOTION_TOKEN")
-    collection_view_url = os.getenv("NOTION_COLLECTION_VIEW")
+    api_key = os.getenv("NOTION_API_KEY")
+    database_id = os.getenv("NOTION_DB_ID")
 
     fileslist = []
     if os.path.isfile(args.inpath):
@@ -263,8 +313,9 @@ def main():
         return
 
     nup = NotionUploader(
-        token,
-        collection_view_url,
+        token=token,
+        api_key=api_key,
+        database_id=database_id,
         force_update=args.force,
         dry_run=args.dryrun,
     )
