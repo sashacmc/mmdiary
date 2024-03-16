@@ -7,6 +7,8 @@ import argparse
 import log
 import json
 import uuid
+import cachedb
+
 from datetime import datetime
 
 from notion.client import NotionClient
@@ -19,6 +21,7 @@ from notion.collection import NotionDate, CollectionRowBlock
 
 MAX_TEXT_SIZE = 2000
 JSON_EXT = ".json"
+CACHE_DB_FILE = "~/.notion_upload.sqlite3"
 
 
 class NotionUploader(object):
@@ -27,15 +30,17 @@ class NotionUploader(object):
     ):
         self.__status = {
             "total": 0,
+            "existing": 0,
             "processed": 0,
             "removed": 0,
             "created": 0,
             "failed": 0,
             "skipped": 0,
         }
+        self.__cache = cachedb.CacheDB(CACHE_DB_FILE)
         self.__dry_run = dry_run
         self.__force_update = force_update
-        self.__notion = NotionClient(token_v2=token, enable_caching=True)
+        self.__notion = NotionClient(token_v2=token, enable_caching=False)
 
         cv = self.__notion.get_collection_view(collection_view_url)
         self.__collection = cv.collection
@@ -46,27 +51,26 @@ class NotionUploader(object):
         return self.__status
 
     def init_existing_pages(self):
-        self.__existing_pages = {}
-        duplicate = False
-        for r in self.__collection.get_rows(limit=10000000):
-            if not self.add_existing_page(
-                r.source, r.processtime, r.id, update=False
-            ):
-                duplicate = True
-        if duplicate:
-            raise Exception("Duplicate items in collection")
-        cnt = len(self.__existing_pages)
+        cnt = len(self.__cache.list_existing_pages())
+        if cnt == 0:
+            logging.info("Cache empty, init...")
+            duplicate = False
+            for r in self.__collection.get_rows(limit=10000000):
+                if self.__cache.check_existing_pages(r.source) is not None:
+                    logging.warn(f"Duplicate item: {r.source}: {r.id}")
+                    duplicate = True
+                self.__cache.add_existing_page(r.source, r.processtime, r.id)
+            if duplicate:
+                raise Exception("Duplicate items in collection")
+
+        cnt = len(self.__cache.list_existing_pages())
         self.__status["existing_init"] = cnt
+        self.__status["existing"] = cnt
         logging.info(f"Found existing {cnt} items")
 
-    def add_existing_page(self, sourse, processtime, bid, update=True):
-        if not update:
-            if sourse in self.__existing_pages:
-                logging.warn(f"Duplicate item: {sourse}: {bid}")
-                return False
-
-        self.__existing_pages[sourse] = (processtime, bid)
-        self.__status["existing"] = len(self.__existing_pages)
+    def add_existing_page(self, source, processtime, bid):
+        self.__cache.add_existing_page(source, processtime, bid)
+        self.__status["existing"] += 1
         return True
 
     def split_large_text(self, text):
@@ -101,7 +105,7 @@ class NotionUploader(object):
         self.__status["removed"] += 1
 
     def check_existing(self, source, processtime):
-        page = self.__existing_pages.get(source, None)
+        page = self.__cache.check_existing_pages(source)
         logging.debug(f"check_existing: {source}: {page}")
         if page is None:
             return False
@@ -132,22 +136,26 @@ class NotionUploader(object):
             processtime=data["processtime"],
             icon="🎙️",
         )
+        try:
+            res.children.add_new(
+                CalloutBlock,
+                title=data["recordtime"],
+                icon="📅",
+                color="gray_background",
+            )
 
-        res.children.add_new(
-            CalloutBlock,
-            title=data["recordtime"],
-            icon="📅",
-            color="gray_background",
-        )
+            audio = res.children.add_new(AudioBlock)
+            info = audio.upload_file(fname)
+            logging.debug(f"Audio uploaded: {info}")
 
-        audio = res.children.add_new(AudioBlock)
-        info = audio.upload_file(fname)
-        logging.debug(f"Audio uploaded: {info}")
+            for block in self.split_large_text(data["text"]):
+                res.children.add_new(TextBlock, title=block)
 
-        for block in self.split_large_text(data["text"]):
-            res.children.add_new(TextBlock, title=block)
-
-        res.set("format.block_locked", True)
+            res.set("format.block_locked", True)
+        except Exception:
+            logging.warn(f"Delete uncompleate page for: {fname}")
+            self.delete_page(res.id)
+            raise
 
         self.__status["created"] += 1
 
@@ -157,6 +165,11 @@ class NotionUploader(object):
         with open(file, "r") as f:
             return json.load(f)
 
+    def check_json(self, data):
+        for f in ("caption", "recordtime", "processtime", "source"):
+            if len(data[f].strip()) == 0:
+                raise Exception(f"Incorrect file: empty {f}")
+
     def get_source_file(self, in_file, src_file):
         return os.path.join(os.path.dirname(in_file), src_file)
 
@@ -165,6 +178,7 @@ class NotionUploader(object):
         self.__status["processed"] += 1
 
         data = self.load_json(file)
+        self.check_json(data)
 
         if self.check_existing(data["source"], data["processtime"]):
             logging.debug("skip existing")
