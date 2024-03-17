@@ -9,8 +9,6 @@ import json
 import uuid
 import cachedb
 
-from datetime import datetime
-
 from notion_client import Client
 from notion_client.helpers import iterate_paginated_api
 
@@ -20,7 +18,7 @@ from notion.block import (
     TextBlock,
     CalloutBlock,
 )
-from notion.collection import NotionDate, CollectionRowBlock
+from notion.collection import CollectionRowBlock
 
 MAX_TEXT_SIZE = 2000
 JSON_EXT = ".json"
@@ -107,9 +105,6 @@ class NotionUploader(object):
             blocks.append("\n".join(block))
 
         return blocks
-
-    def str_to_notion_date(self, s):
-        return NotionDate(datetime.strptime(s[:10], "%Y-%m-%d").date())
 
     def delete_page(self, bid):
         logging.debug(f"remove block {bid}")
