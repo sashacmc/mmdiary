@@ -39,7 +39,9 @@ class Transcriber(object):
 
     def to_text(self, res):
         if "segments" in res:
-            return "\n".join([s.get("text", "").strip() for s in res["segments"]])
+            return "\n".join(
+                [s.get("text", "").strip() for s in res["segments"]]
+            )
         else:
             return ""
 
@@ -66,7 +68,7 @@ class Transcriber(object):
                 return
 
         prop = self.__fileprop.get(file)
-        if prop.type() != fileprop.AUDIO:
+        if prop.type() not in (fileprop.AUDIO, fileprop.VIDEO):
             logging.info("Not audio file, skip")
             return
 
@@ -80,7 +82,9 @@ class Transcriber(object):
             "type": "audio",
             "source": os.path.split(file)[1],
             "duration": self.duration(res),
-            "recordtime": prop.time().strftime(TIME_OUT_FORMAT) if prop.time() is not None else "",
+            "recordtime": prop.time().strftime(TIME_OUT_FORMAT)
+            if prop.time() is not None
+            else "",
             "processtime": datetime.now().strftime(TIME_OUT_FORMAT),
         }
 
@@ -109,7 +113,9 @@ def __args_parse():
     parser = argparse.ArgumentParser()
     parser.add_argument('inpath', help='Input path')
     parser.add_argument('-l', '--logfile', help='Log file', default=None)
-    parser.add_argument('-u', '--update', help='Update existing', action='store_true')
+    parser.add_argument(
+        '-u', '--update', help='Update existing', action='store_true'
+    )
     return parser.parse_args()
 
 
