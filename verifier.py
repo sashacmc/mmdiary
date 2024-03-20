@@ -12,8 +12,9 @@ CACHE_DB_FILE = "~/.notion_upload.sqlite3"
 
 
 class Verifier(object):
-    def __init__(self, dryrun):
+    def __init__(self, dryrun, force):
         self.__dryrun = dryrun
+        self.__force = force
         self.__cache = cachedb.CacheDB(CACHE_DB_FILE)
         self.__notion = NotionClient(token_v2=os.getenv("NOTION_TOKEN"))
 
@@ -33,10 +34,10 @@ class Verifier(object):
                 raise Exception(f"empty {f}")
 
         if data["caption"].startswith("С вами был Игорь Негода"):
-            raise Exception(f"caption: negoda")
+            raise Exception("caption: negoda")
 
         if data["caption"] == "Редактор субтитров А.":
-            raise Exception(f"caption: redactor")
+            raise Exception("caption: redactor")
 
     def get_source_file(self, in_file, src_file):
         return os.path.join(os.path.dirname(in_file), src_file)
@@ -49,13 +50,23 @@ class Verifier(object):
             source = self.get_source_file(file, data["source"])
             uploaded = self.__cache.check_existing_pages(data["source"])
 
-            print(file, str(ex))
+            print(str(ex))
+            print(file)
             print(source)
-            print(uploaded)
+            print("notion:", uploaded)
 
             if self.__dryrun:
                 print()
                 return
+
+            if not self.__force:
+                r = ""
+                while r not in ("y", "n"):
+                    r = input("Remove files [Y/n]? ").lower()
+                    if r == "":
+                        r = "y"
+                if r == "n":
+                    return
 
             if uploaded is not None:
                 self.__cache.remove_from_existing_pages(data["source"])
@@ -63,7 +74,10 @@ class Verifier(object):
                 block.remove()
                 print("removed from notion")
 
-            os.unlink(source)
+            if os.path.isfile(source):
+                os.unlink(source)
+            else:
+                print(f"File {source} don't exists")
             os.unlink(file)
             print("removed from fs")
 
@@ -89,6 +103,12 @@ def args_parse():
     parser = argparse.ArgumentParser()
     parser.add_argument('inpath', help='Input path')
     parser.add_argument('-d', '--dryrun', help='Dry run', action='store_true')
+    parser.add_argument(
+        '-f',
+        '--force',
+        help='Force (remove without confirmation)',
+        action='store_true',
+    )
     return parser.parse_args()
 
 
@@ -101,7 +121,7 @@ def main():
     elif os.path.isdir(args.inpath):
         fileslist = __scan_files(args.inpath)
 
-    vf = Verifier(args.dryrun)
+    vf = Verifier(args.dryrun, args.force)
     vf.process_list(fileslist)
 
 
