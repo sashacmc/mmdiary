@@ -6,6 +6,9 @@ import sqlite3
 import argparse
 import threading
 
+from notion_client import Client
+from notion_client.helpers import iterate_paginated_api
+
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS existing_pages (
     "filename" TEXT,
@@ -79,6 +82,31 @@ class CacheDB(object):
                 'DELETE FROM existing_pages WHERE filename=?', (filename,)
             )
 
+    def __get_prop(self, row, name):
+        return row["properties"][name]["rich_text"][0]["plain_text"]
+
+    def sync_existing_pages(self, notion_api, database_id):
+        self.clean_existing_pages()
+
+        res = iterate_paginated_api(
+            notion_api.databases.query,
+            database_id=database_id,
+        )
+
+        duplicates = ""
+
+        for r in res:
+            source = self.__get_prop(r, "source")
+            processtime = self.__get_prop(r, "processtime")
+            rid = r["id"]
+            if self.check_existing_pages(source) is not None:
+                duplicates += f"\n{source}: {rid}"
+
+            self.add_existing_page(source, processtime, rid)
+
+        if duplicates != "":
+            raise Exception(f"Duplicate items in collection: {duplicates}")
+
 
 def args_parse():
     parser = argparse.ArgumentParser()
@@ -88,12 +116,18 @@ def args_parse():
         help='Action',
         required=True,
         choices=[
-            'clean_cache',
-            'list_cache',
-            'remove_from_cache',
+            'clean',
+            'list',
+            'remove',
+            'sync',
         ],
     )
-    parser.add_argument('-d', '--database', help='Database file')
+    parser.add_argument(
+        '-d',
+        '--database',
+        help='Database file',
+        default=os.getenv("NOTION_CACHE_DB_FILE"),
+    )
     parser.add_argument('-f', '--file', help='File name')
     return parser.parse_args()
 
@@ -102,13 +136,17 @@ def main():
     args = args_parse()
     db = CacheDB(args.database)
 
-    if args.action == 'clean_cache':
+    if args.action == 'clean':
         db.clean_existing_pages()
-    if args.action == 'list_cache':
+    if args.action == 'list':
         for f in db.list_existing_pages():
             print(f)
-    elif args.action == 'remove_from_cache':
+    elif args.action == 'remove':
         db.remove_from_existing_pages(args.file)
+    elif args.action == 'sync':
+        db.sync_existing_pages(
+            Client(auth=os.getenv("NOTION_API_KEY")), os.getenv("NOTION_DB_ID")
+        )
 
 
 if __name__ == '__main__':

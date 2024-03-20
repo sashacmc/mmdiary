@@ -9,7 +9,6 @@ import json
 import cachedb
 
 from notion_client import Client
-from notion_client.helpers import iterate_paginated_api
 
 from notion.client import NotionClient
 from notion.block import (
@@ -55,33 +54,15 @@ class NotionUploader(object):
     def status(self):
         return self.__status
 
-    def get_prop(self, row, name):
-        return row["properties"][name]["rich_text"][0]["plain_text"]
-
     def init_existing_pages(self):
         cnt = len(self.__cache.list_existing_pages())
         if cnt == 0 and not self.__dry_run:
             logging.info("Cache empty, init...")
-            duplicate = False
-
-            res = iterate_paginated_api(
-                self.__notion_api.databases.query,
-                database_id=self.__database_id,
+            self.__cache.sync_existing_pages(
+                self.__notion_api, self.__database_id
             )
+            cnt = len(self.__cache.list_existing_pages())
 
-            for r in res:
-                source = self.get_prop(r, "source")
-                processtime = self.get_prop(r, "processtime")
-                rid = r["id"]
-                if self.__cache.check_existing_pages(source) is not None:
-                    logging.warn(f"Duplicate item: {source}: {rid}")
-                    duplicate = True
-                self.__cache.add_existing_page(source, processtime, rid)
-            if duplicate:
-                self.__cache.clean_existing_pages()
-                raise Exception("Duplicate items in collection")
-
-        cnt = len(self.__cache.list_existing_pages())
         self.__status["existing_init"] = cnt
         self.__status["existing"] = cnt
         logging.info(f"Found existing {cnt} items")
