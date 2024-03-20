@@ -6,7 +6,6 @@ import progressbar
 import argparse
 import log
 import json
-import uuid
 import cachedb
 
 from notion_client import Client
@@ -22,12 +21,17 @@ from notion.collection import CollectionRowBlock
 
 MAX_TEXT_SIZE = 2000
 JSON_EXT = ".json"
-CACHE_DB_FILE = "~/.notion_upload.sqlite3"
 
 
 class NotionUploader(object):
     def __init__(
-        self, token, api_key, database_id, force_update=False, dry_run=False
+        self,
+        token,
+        api_key,
+        database_id,
+        cache_db_file,
+        force_update=False,
+        dry_run=False,
     ):
         self.__status = {
             "total": 0,
@@ -38,7 +42,7 @@ class NotionUploader(object):
             "failed": 0,
             "skipped": 0,
         }
-        self.__cache = cachedb.CacheDB(CACHE_DB_FILE)
+        self.__cache = cachedb.CacheDB(cache_db_file)
         self.__dry_run = dry_run
         self.__force_update = force_update
         self.__notion = NotionClient(token_v2=token, enable_caching=False)
@@ -56,7 +60,7 @@ class NotionUploader(object):
 
     def init_existing_pages(self):
         cnt = len(self.__cache.list_existing_pages())
-        if cnt == 0:
+        if cnt == 0 and not self.__dry_run:
             logging.info("Cache empty, init...")
             duplicate = False
 
@@ -83,9 +87,9 @@ class NotionUploader(object):
         logging.info(f"Found existing {cnt} items")
 
     def add_existing_page(self, source, processtime, bid):
-        self.__cache.add_existing_page(source, processtime, bid)
+        if not self.__dry_run:
+            self.__cache.add_existing_page(source, processtime, bid)
         self.__status["existing"] += 1
-        return True
 
     def split_large_text(self, text):
         block_len = 0
@@ -106,13 +110,18 @@ class NotionUploader(object):
 
         return blocks
 
-    def delete_page(self, bid):
+    def delete_page(self, source, bid):
         logging.debug(f"remove block {bid}")
-        block = self.__notion.get_block(bid)
-        if type(block) is CollectionRowBlock:
-            block.remove()
-        else:
-            block.remove(permanently=True)
+        if not self.__dry_run:
+            block = self.__notion.get_block(bid)
+            if type(block) is CollectionRowBlock:
+                block.remove()
+            else:
+                block.remove(permanently=True)
+
+            if source is not None:
+                self.__cache.remove_from_existing_pages(source)
+
         self.__status["removed"] += 1
 
     def check_existing(self, source, processtime):
@@ -125,12 +134,12 @@ class NotionUploader(object):
             logging.info(
                 f"processtime changed: {page[0]} != {processtime} for {source}"
             )
-            self.delete_page(page[1])
+            self.delete_page(source, page[1])
             return False
 
         if self.__force_update:
             logging.info(f"force update for {source}")
-            self.delete_page(page[1])
+            self.delete_page(source, page[1])
             return False
 
         return True
@@ -169,8 +178,8 @@ class NotionUploader(object):
 
     def create_page(self, data, fname):
         if self.__dry_run:
-            rid = uuid.uuid1()
-            return rid
+            self.__status["created"] += 1
+            return
 
         bid = self.add_row(
             title=data["caption"],
@@ -196,14 +205,14 @@ class NotionUploader(object):
                 res.children.add_new(TextBlock, title=block)
 
             res.set("format.block_locked", True)
+
+            self.add_existing_page(data["source"], data["processtime"], res.id)
         except Exception:
             logging.warn(f"Delete uncompleate page for: {fname}")
-            self.delete_page(bid)
+            self.delete_page(None, bid)
             raise
 
         self.__status["created"] += 1
-
-        return res.id
 
     def load_json(self, file):
         with open(file, "r") as f:
@@ -232,7 +241,6 @@ class NotionUploader(object):
         fname = self.get_source_file(file, data["source"])
         res = self.create_page(data, fname)
 
-        self.add_existing_page(data["source"], data["processtime"], res)
         logging.info(f"Saved: {res}")
 
     def process_list(self, fileslist):
@@ -296,6 +304,7 @@ def main():
     token = os.getenv("NOTION_TOKEN")
     api_key = os.getenv("NOTION_API_KEY")
     database_id = os.getenv("NOTION_DB_ID")
+    cache_db_file = os.getenv("NOTION_CACHE_DB_FILE")
 
     fileslist = []
     if os.path.isfile(args.inpath):
@@ -311,6 +320,7 @@ def main():
         token=token,
         api_key=api_key,
         database_id=database_id,
+        cache_db_file=cache_db_file,
         force_update=args.force,
         dry_run=args.dryrun,
     )
