@@ -45,8 +45,8 @@ class CacheDB(object):
         with self.__lock:
             self.commit()
             c = self.__conn.cursor()
-            res = c.execute('SELECT filename FROM existing_pages')
-            return [r[0] for r in res.fetchall()]
+            res = c.execute('SELECT filename, bid FROM existing_pages')
+            return res.fetchall()
 
     def clean_existing_pages(self):
         with self.__lock:
