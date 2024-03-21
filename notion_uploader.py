@@ -189,7 +189,7 @@ class NotionUploader(object):
 
             self.add_existing_page(data["source"], data["processtime"], res.id)
         except Exception:
-            logging.warn(f"Delete uncompleate page for: {fname}")
+            logging.warning(f"Delete uncompleate page for: {fname}")
             self.delete_page(None, bid)
             raise
 
