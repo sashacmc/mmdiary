@@ -111,9 +111,10 @@ class NotionUploader(object):
         if page is None:
             return False
 
-        if page[0] != processtime:
+        # page processtime == "" mean that page was modied on notion side
+        if processtime > page[0] and page[0] != "":
             logging.info(
-                f"processtime changed: {page[0]} != {processtime} for {source}"
+                f"processtime changed: {processtime} > {page[0]} for {source}"
             )
             self.delete_page(source, page[1])
             return False

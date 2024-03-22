@@ -82,8 +82,16 @@ class CacheDB(object):
                 'DELETE FROM existing_pages WHERE filename=?', (filename,)
             )
 
-    def __get_prop(self, row, name):
-        return row["properties"][name]["rich_text"][0]["plain_text"]
+    def __get_prop(self, row, name, default=""):
+        try:
+            rt = row["properties"][name]["rich_text"]
+            if len(rt) != 0:
+                return rt[0]["plain_text"]
+            else:
+                return ""
+        except IndexError:
+            print(f"Property '{name}' not found in {row}")
+            return default
 
     def sync_existing_pages(self, notion_api, database_id):
         self.clean_existing_pages()
