@@ -21,6 +21,7 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+from collections import defaultdict
 
 g_audiofiles = audiolib.AudioLib().get_processed()
 MAX_MESSAGE_SIZE = 1024
@@ -39,15 +40,31 @@ class DateSelector(object):
         self.__year = None
         self.__month = None
         self.__day = None
+        self.__load()
+
+    def __load(self):
+        self.__files = defaultdict(
+            lambda: defaultdict(lambda: defaultdict(lambda: []))
+        )
+        for af in g_audiofiles:
+            data = af.load_json()
+            rtime = data["recordtime"]  # "YYYY-MM-DD hh-mm-ss"
+            year = rtime[:4]
+            month = rtime[5:7]
+            day = rtime[8:10]
+            self.__files[year][month][day].append(af)
 
     def __get_years(self):
-        return [str(y) for y in range(2000, 2024)]
+        return sorted(self.__files.keys())
 
     def __get_months(self, year):
-        return [str(y) for y in range(1, 12)]
+        return sorted(self.__files[year].keys())
 
     def __get_days(self, year, month):
-        return [str(y) for y in range(1, 30)]
+        return sorted(self.__files[year][month].keys())
+
+    def __get_notes(self, year, month, day):
+        return sorted(self.__files[year][month][day])
 
     def get_items(self):
         if self.__type == self.YEAR:
@@ -66,6 +83,8 @@ class DateSelector(object):
             return "month"
         elif self.__type == self.DAY:
             return "day"
+        elif self.__type == self.END:
+            return "back"
         else:
             return ""
 
@@ -88,10 +107,13 @@ class DateSelector(object):
                 self.__type = self.END
             else:
                 self.__type = self.MONTH
+        elif self.__type == self.END:
+            if val == self.RETURN:
+                self.__type = self.MONTH
 
     def result(self):
         if self.__type == self.END:
-            return f"{self.__year}-{self.__month}-{self.__day}"
+            return self.__get_notes(self.__year, self.__month, self.__day)
         else:
             return None
 
@@ -150,27 +172,30 @@ async def command_get(
         InlineKeyboardButton(it, callback_data=it)
         for it in g_selector.get_items()
     ]
-    if len(button_list) != 0:
-        reply_markup = InlineKeyboardMarkup(
-            build_menu(
-                button_list,
-                n_cols=3,
-                footer_buttons=[
-                    InlineKeyboardButton("<<", callback_data="<<"),
-                ],
-            )
-        )
-        await resp.reply_markdown(
-            text="Choose " + g_selector.get_caption(),
-            reply_markup=reply_markup,
-        )
-    else:
+    if len(button_list) == 0:
         res = g_selector.result()
         if res is None:
-            res = "Bye"
+            await resp.reply_text("Bye")
+        else:
+            for af in res:
+                audio, texts = audiofile_to_message(af)
+                await resp.reply_audio(**audio)
+                for text in texts:
+                    await resp.reply_text(text)
 
-        await resp.reply_text(text=res)
-        g_selector = None
+    reply_markup = InlineKeyboardMarkup(
+        build_menu(
+            button_list,
+            n_cols=3,
+            footer_buttons=[
+                InlineKeyboardButton("<<", callback_data="<<"),
+            ],
+        )
+    )
+    await resp.reply_markdown(
+        text="Choose " + g_selector.get_caption(),
+        reply_markup=reply_markup,
+    )
 
 
 def build_menu(buttons, n_cols, header_buttons=None, footer_buttons=None):

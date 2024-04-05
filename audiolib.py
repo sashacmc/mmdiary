@@ -39,6 +39,9 @@ class AudioFile(object):
     def prop(self):
         return g_fileprop.get(self.name())
 
+    def __lt__(self, other):
+        return self.__filename < other.__filename
+
     def __repr__(self):
         return self.__filename
 
