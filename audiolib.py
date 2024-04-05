@@ -47,7 +47,9 @@ class AudioFile(object):
 
 
 class AudioLib(object):
-    def __init__(self, root):
+    def __init__(self, root=None):
+        if root is None:
+            root = os.getenv("AUDIO_NOTES_ROOT")
         self.__root = root
 
     def __on_walk_error(self, err):
@@ -79,15 +81,31 @@ class AudioLib(object):
         return list(filter(lambda af: not af.has_json(), self.get_all()))
 
 
+def split_large_text(text, max_block_size):
+    block_len = 0
+    block = []
+    blocks = []
+    for s in text.split("\n"):
+        s_len = len(s) + 1
+        if block_len + s_len < max_block_size:
+            block.append(s)
+            block_len += s_len
+        else:
+            blocks.append("\n".join(block))
+            block = []
+            block_len = 0
+
+    if len(block) != 0:
+        blocks.append("\n".join(block))
+
+    return blocks
+
+
 def main():
-    root = os.getenv("AUDIO_NOTES_ROOT")
-    lib = AudioLib(root)
+    lib = AudioLib()
     for f in lib.get_new():
-        print(f.prop().type())
+        print(f)
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception:
-        logging.exception("Main failed")
+    main()

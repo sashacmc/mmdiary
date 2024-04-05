@@ -71,25 +71,6 @@ class NotionUploader(object):
             self.__cache.add_existing_page(source, processtime, bid)
         self.__status["existing"] += 1
 
-    def split_large_text(self, text):
-        block_len = 0
-        block = []
-        blocks = []
-        for s in text.split("\n"):
-            s_len = len(s) + 1
-            if block_len + s_len < MAX_TEXT_SIZE:
-                block.append(s)
-                block_len += s_len
-            else:
-                blocks.append("\n".join(block))
-                block = []
-                block_len = 0
-
-        if len(block) != 0:
-            blocks.append("\n".join(block))
-
-        return blocks
-
     def delete_page(self, source, bid):
         logging.debug(f"remove block {bid}")
         if not self.__dry_run:
@@ -192,7 +173,9 @@ class NotionUploader(object):
             info = audio.upload_file(fname)
             logging.debug(f"Audio uploaded: {info}")
 
-            for block in self.split_large_text(data["text"]):
+            for block in audiolib.split_large_text(
+                data["text"], MAX_TEXT_SIZE
+            ):
                 res.children.add_new(TextBlock, title=block)
 
             res.set("format.block_locked", True)
