@@ -4,8 +4,9 @@ import os
 import logging
 import progressbar
 import argparse
+
+import audiolib
 import log
-import json
 import cachedb
 
 from notion_client import Client
@@ -19,7 +20,6 @@ from notion.block import (
 from notion.collection import CollectionRowBlock
 
 MAX_TEXT_SIZE = 2000
-JSON_EXT = ".json"
 
 
 class NotionUploader(object):
@@ -39,7 +39,6 @@ class NotionUploader(object):
             "removed": 0,
             "created": 0,
             "failed": 0,
-            "skipped": 0,
         }
         self.__cache = cachedb.CacheDB(cache_db_file)
         self.__dry_run = dry_run
@@ -105,7 +104,9 @@ class NotionUploader(object):
 
         self.__status["removed"] += 1
 
-    def check_existing(self, source, processtime):
+    def check_existing(self, data, delete):
+        source = data["source"]
+        processtime = data["processtime"]
         page = self.__cache.check_existing_pages(source)
         logging.debug(f"check_existing: {source}: {page}")
         if page is None:
@@ -113,18 +114,26 @@ class NotionUploader(object):
 
         # page processtime == "" mean that page was modied on notion side
         if processtime > page[0] and page[0] != "":
-            logging.info(
-                f"processtime changed: {processtime} > {page[0]} for {source}"
-            )
-            self.delete_page(source, page[1])
+            if delete:
+                logging.info(
+                    f"processtime changed: {processtime} > {page[0]} for {source}"
+                )
+                self.delete_page(source, page[1])
             return False
 
         if self.__force_update:
-            logging.info(f"force update for {source}")
-            self.delete_page(source, page[1])
+            if delete:
+                logging.info(f"force update for {source}")
+                self.delete_page(source, page[1])
             return False
 
         return True
+
+    def filter_existing(self, file):
+        data = file.load_json()
+        self.check_json(data)
+
+        return not self.check_existing(data, False)
 
     def add_row(self, title, date, source, processtime, icon):
         properties = {
@@ -196,75 +205,52 @@ class NotionUploader(object):
 
         self.__status["created"] += 1
 
-    def load_json(self, file):
-        with open(file, "r") as f:
-            return json.load(f)
-
     def check_json(self, data):
         for f in ("caption", "recordtime", "processtime", "source"):
             if len(data[f].strip()) == 0:
                 raise Exception(f"Incorrect file: empty {f}")
 
-    def get_source_file(self, in_file, src_file):
-        return os.path.join(os.path.dirname(in_file), src_file)
-
     def process(self, file):
         logging.info(f"Process file: {file}")
         self.__status["processed"] += 1
 
-        data = self.load_json(file)
+        data = file.load_json()
         self.check_json(data)
 
-        if self.check_existing(data["source"], data["processtime"]):
-            logging.debug("skip existing")
-            self.__status["skipped"] += 1
+        if self.check_existing(data, True):
             return
 
-        fname = self.get_source_file(file, data["source"])
-        res = self.create_page(data, fname)
+        res = self.create_page(data, file.name())
 
         logging.info(f"Saved: {res}")
 
     def process_list(self, fileslist):
+        fileslist = list(filter(self.filter_existing, fileslist))
+
         self.__status["total"] = len(fileslist)
         pbar = progressbar.ProgressBar(
             maxval=len(fileslist),
             widgets=[
-                "Uploading",
-                ' ',
+                "Uploading: ",
+                progressbar.SimpleProgress(),
+                " (",
                 progressbar.Percentage(),
-                ' ',
+                ") ",
                 progressbar.Bar(),
-                ' ',
+                " ",
                 progressbar.ETA(),
             ],
         ).start()
 
-        for fname in fileslist:
+        for af in fileslist:
             try:
-                self.process(fname)
+                self.process(af)
             except Exception:
                 self.__status["failed"] += 1
                 logging.exception("Notion uploader failed")
             pbar.increment()
 
         pbar.finish()
-
-
-def __on_walk_error(err):
-    logging.error('Scan files error: %s' % err)
-
-
-def __scan_files(inpath):
-    res = []
-    for root, dirs, files in os.walk(inpath, onerror=__on_walk_error):
-        for fname in files:
-            if os.path.splitext(fname)[1] == JSON_EXT:
-                res.append(os.path.join(root, fname))
-
-    res.sort()
-    logging.info(f"Found {len(res)} files")
-    return res
 
 
 def args_parse():
@@ -290,9 +276,10 @@ def main():
 
     fileslist = []
     if os.path.isfile(args.inpath):
-        fileslist = (args.inpath,)
+        fileslist = (audiolib.AudioFile(args.inpath),)
     elif os.path.isdir(args.inpath):
-        fileslist = __scan_files(args.inpath)
+        lib = audiolib.AudioLib(args.inpath)
+        fileslist = lib.get_processed()
 
     if len(fileslist) == 0:
         logging.info("Nothing to do, exit")
