@@ -17,6 +17,7 @@ from telegram.ext import (
     Application,
     CommandHandler,
     CallbackQueryHandler,
+    CallbackContext,
     ContextTypes,
     MessageHandler,
     filters,
@@ -118,7 +119,19 @@ class DateSelector(object):
             return None
 
 
-g_selector = None
+class CustomContext(CallbackContext):
+    def __init__(
+        self,
+        application,
+        chat_id=None,
+        user_id=None,
+    ):
+        super().__init__(
+            application=application, chat_id=chat_id, user_id=user_id
+        )
+        self.bot_data["users"] = os.getenv("AUDIO_NOTES_TELEGRAM_USERS").split(
+            ","
+        )
 
 
 def audiofile_to_message(audiofile):
@@ -132,23 +145,32 @@ def audiofile_to_message(audiofile):
     }, texts[1:]
 
 
+async def check_auth(update, context):
+    if update.effective_user.username not in context.bot_data["users"]:
+        await update.message.reply_html("You not registered, contact admin")
+        return False
+    return True
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user
-    await update.message.reply_html(
-        rf"Hi {user.mention_html()}!",
-        reply_markup=ForceReply(selective=True),
-    )
+    username = update.effective_user.username
+    print(username, context.user_data, context.bot_data)
+    await update.message.reply_html(f"Hi {username}!")
+    await check_auth(update, context)
 
 
 async def command_help(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
+    print(update.effective_user.username, context.user_data)
     await update.message.reply_text("Help!")
 
 
 async def command_random(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
+    if not await check_auth(update, context):
+        return
     audio, texts = audiofile_to_message(random.choice(g_audiofiles))
     await update.message.reply_audio(**audio)
     for text in texts:
@@ -158,24 +180,30 @@ async def command_random(
 async def command_get(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
+    if not await check_auth(update, context):
+        return
     query = update.callback_query
     resp = update.message
-    global g_selector
+    selector = None
     if query is None:
-        g_selector = DateSelector()
+        selector = DateSelector()
+        context.user_data["selector"] = selector
     else:
+        selector = context.user_data["selector"]
         await query.answer()
-        g_selector.select_item(query.data)
+        selector.select_item(query.data)
         resp = query.message
 
     button_list = [
         InlineKeyboardButton(it, callback_data=it)
-        for it in g_selector.get_items()
+        for it in selector.get_items()
     ]
     if len(button_list) == 0:
-        res = g_selector.result()
+        res = selector.result()
         if res is None:
             await resp.reply_text("Bye")
+            selector = None
+            return
         else:
             for af in res:
                 audio, texts = audiofile_to_message(af)
@@ -193,7 +221,7 @@ async def command_get(
         )
     )
     await resp.reply_markdown(
-        text="Choose " + g_selector.get_caption(),
+        text="Choose " + selector.get_caption(),
         reply_markup=reply_markup,
     )
 
@@ -219,8 +247,14 @@ def main() -> None:
     logging.getLogger("telegram").setLevel(logging.WARNING)
 
     token = os.getenv("AUDIO_NOTES_TELEGRAM_BOT_TOKEN")
+    users_auto_send = os.getenv("AUDIO_NOTES_TELEGRAM_USERS_AUTO_SEND").split(
+        ","
+    )
 
-    application = Application.builder().token(token).build()
+    context_types = ContextTypes(context=CustomContext)
+    application = (
+        Application.builder().token(token).context_types(context_types).build()
+    )
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", command_help))
