@@ -1,11 +1,11 @@
 #!/usr/bin/python3
 
+import log
+import audiolib
+
 import os
 import logging
 import random
-
-import log
-import audiolib
 
 from telegram import (
     ForceReply,
@@ -24,6 +24,7 @@ from telegram.ext import (
     filters,
 )
 from collections import defaultdict
+from datetime import datetime
 
 g_audiofiles = audiolib.AudioLib().get_processed()
 MAX_MESSAGE_SIZE = 1024
@@ -111,7 +112,7 @@ class DateSelector(object):
                 self.__type = self.MONTH
         elif self.__type == self.END:
             if val == self.RETURN:
-                self.__type = self.MONTH
+                self.__type = self.DAY
 
     def result(self):
         if self.__type == self.END:
@@ -132,7 +133,10 @@ def audiofile_to_message(audiofile):
 
 
 async def check_auth(update, context):
-    if update.effective_user.username not in context.application.auth_users:
+    if (
+        update.effective_user.username.lower()
+        not in context.application.auth_users
+    ):
         await update.message.reply_html("You not registered, contact admin")
         return False
     return True
@@ -240,13 +244,24 @@ def main() -> None:
     token = os.getenv("AUDIO_NOTES_TELEGRAM_BOT_TOKEN")
 
     job_queue = JobQueue()
-    # job_queue.run_daily(callback, time)
-    job_queue.run_repeating(job_random, 30)
+    job_queue.run_daily(
+        job_random,
+        datetime.strptime(
+            os.getenv("AUDIO_NOTES_TELEGRAM_AUTO_SEND_TIME"), '%H:%M:%S'
+        ).time(),
+    )
+    # job_queue.run_repeating(job_random, 60)
+
     application = (
         Application.builder().token(token).job_queue(job_queue).build()
     )
 
-    application.auth_users = os.getenv("AUDIO_NOTES_TELEGRAM_USERS").split(",")
+    application.auth_users = list(
+        map(
+            lambda u: u.lower(),
+            os.getenv("AUDIO_NOTES_TELEGRAM_USERS").split(","),
+        )
+    )
     application.auto_send_chats = list(
         map(
             int,

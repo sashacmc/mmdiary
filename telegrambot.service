@@ -1,0 +1,21 @@
+# sudo cp telegrambot.service /lib/systemd/system/audio-notes-telegrambot.service 
+# sudo systemctl daemon-reload
+# sudo systemctl enable audio-notes-telegrambot.service
+# sudo systemctl start audio-notes-telegrambot.service
+#
+[Unit]
+Description=Audio Notes Telegram Bot Service
+After=network.target
+
+[Service]
+Type=simple
+User=sashacmc
+Group=sashacmc
+EnvironmentFile=/home/sashacmc/src/my/voice-rec-tools/telegrambot.env
+ExecStart=/home/sashacmc/src/my/voice-rec-tools/telegrambot_service.py
+StandardInput=tty-force
+StandardOutput=append:/var/log/user/audio-notes-telegrambot.log
+StandardError=append:/var/log/user/audio-notes-telegrambot.log
+
+[Install]
+WantedBy=default.target 
