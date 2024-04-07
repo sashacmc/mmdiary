@@ -19,6 +19,7 @@ from telegram.ext import (
     CallbackQueryHandler,
     CallbackContext,
     ContextTypes,
+    JobQueue,
     MessageHandler,
     filters,
 )
@@ -119,21 +120,6 @@ class DateSelector(object):
             return None
 
 
-class CustomContext(CallbackContext):
-    def __init__(
-        self,
-        application,
-        chat_id=None,
-        user_id=None,
-    ):
-        super().__init__(
-            application=application, chat_id=chat_id, user_id=user_id
-        )
-        self.bot_data["users"] = os.getenv("AUDIO_NOTES_TELEGRAM_USERS").split(
-            ","
-        )
-
-
 def audiofile_to_message(audiofile):
     data = audiofile.load_json()
     texts = audiolib.split_large_text(data["text"], MAX_MESSAGE_SIZE)
@@ -146,24 +132,29 @@ def audiofile_to_message(audiofile):
 
 
 async def check_auth(update, context):
-    if update.effective_user.username not in context.bot_data["users"]:
+    if update.effective_user.username not in context.application.auth_users:
         await update.message.reply_html("You not registered, contact admin")
         return False
     return True
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    username = update.effective_user.username
-    print(username, context.user_data, context.bot_data)
+async def command_start(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    username = update.message.chat.username
+    chat_id = update.message.chat.id
+    logging.info(f"New user: {username} ({chat_id})")
     await update.message.reply_html(f"Hi {username}!")
     await check_auth(update, context)
 
 
-async def command_help(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-) -> None:
-    print(update.effective_user.username, context.user_data)
-    await update.message.reply_text("Help!")
+async def job_random(context: ContextTypes.DEFAULT_TYPE) -> None:
+    audio, texts = audiofile_to_message(random.choice(g_audiofiles))
+    for chat_id in context.application.auto_send_chats:
+        logging.info(f"Audio {audio['audio']} sent to {chat_id}")
+        await context.bot.send_audio(chat_id, **audio)
+        for text in texts:
+            await context.bot.send_message(chat_id, text)
 
 
 async def command_random(
@@ -247,17 +238,25 @@ def main() -> None:
     logging.getLogger("telegram").setLevel(logging.WARNING)
 
     token = os.getenv("AUDIO_NOTES_TELEGRAM_BOT_TOKEN")
-    users_auto_send = os.getenv("AUDIO_NOTES_TELEGRAM_USERS_AUTO_SEND").split(
-        ","
-    )
 
-    context_types = ContextTypes(context=CustomContext)
+    job_queue = JobQueue()
+    # job_queue.run_daily(callback, time)
+    job_queue.run_repeating(job_random, 30)
     application = (
-        Application.builder().token(token).context_types(context_types).build()
+        Application.builder().token(token).job_queue(job_queue).build()
     )
 
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", command_help))
+    application.auth_users = os.getenv("AUDIO_NOTES_TELEGRAM_USERS").split(",")
+    application.auto_send_chats = list(
+        map(
+            int,
+            filter(
+                lambda v: v != '',
+                os.getenv("AUDIO_NOTES_TELEGRAM_AUTO_SEND_CHATS").split(","),
+            ),
+        )
+    )
+    application.add_handler(CommandHandler("start", command_start))
     application.add_handler(CommandHandler("random", command_random))
     application.add_handler(CommandHandler("get", command_get))
     application.add_handler(CallbackQueryHandler(command_get))
