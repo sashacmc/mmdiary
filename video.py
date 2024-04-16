@@ -5,6 +5,7 @@ import log
 import progressbar
 import logging
 import argparse
+import datelib
 
 from moviepy.editor import VideoFileClip, concatenate_videoclips
 import moviepy.video.fx.all as vfx
@@ -47,75 +48,104 @@ def resize_with_black_padding(clip, new_width=None, new_height=None):
     return res
 
 
+def concatenate_to_mp4(filenames, outputfile):
+    clips = [VideoFileClip(c) for c in filenames]
+
+    max_height = max([c.h for c in clips])
+    max_width = max([c.w for c in clips])
+
+    clips = [
+        resize_with_black_padding(c, max_width, max_height) for c in clips
+    ]
+
+    final_clip = concatenate_videoclips(clips)
+
+    final_clip.write_videofile(
+        outputfile,
+        codec="libx264",
+        ffmpeg_params=[
+            "-vf",
+            "yadif,format=yuv420p",  # deinterlace videos if they're interlaced, produce pixel format with 4:2:0 chroma subsampling.
+            "-crf",
+            "18",  # produce a visually lossless file. Better than setting a bitrate manually.
+            "-bf",
+            "2",  # limit consecutive B-frames to 2
+            "-c:a",
+            "aac",  # use the native encoder to produce an AAC audio stream.
+            "-q:a",
+            "1",  # sets the highest quality for the audio. Better than setting a bitrate manually.
+            "-ac",
+            "2",  # rematrixes audio to stereo.
+            "-ar",
+            "48000",  # resamples audio to 48000 Hz.
+            "-use_editlist",
+            "0",  # avoids writing edit lists
+            "-movflags",
+            "+faststart",  # places moov atom/box at front of the output file.
+        ],
+    )
+
+
 class VideoProcessor(object):
     def __init__(self, update_existing):
         self.__update_existing = update_existing
-
-    def concatenate(self, filenames, outputfile):
-        clips = [VideoFileClip(c) for c in filenames]
-
-        max_height = max([c.h for c in clips])
-        max_width = max([c.w for c in clips])
-
-        clips = [
-            resize_with_black_padding(c, max_width, max_height) for c in clips
-        ]
-
-        final_clip = concatenate_videoclips(clips)
-
-        final_clip.write_videofile(
-            outputfile,
-            codec="libx264",
-            ffmpeg_params=[
-                "-vf",
-                "yadif,format=yuv420p",  # deinterlace videos if they're interlaced, produce pixel format with 4:2:0 chroma subsampling.
-                "-crf",
-                "18",  # produce a visually lossless file. Better than setting a bitrate manually.
-                "-bf",
-                "2",  # limit consecutive B-frames to 2
-                "-c:a",
-                "aac",  # use the native encoder to produce an AAC audio stream.
-                "-q:a",
-                "1",  # sets the highest quality for the audio. Better than setting a bitrate manually.
-                "-ac",
-                "2",  # rematrixes audio to stereo.
-                "-ar",
-                "48000",  # resamples audio to 48000 Hz.
-                "-use_editlist",
-                "0",  # avoids writing edit lists
-                "-movflags",
-                "+faststart",  # places moov atom/box at front of the output file.
-            ],
+        scan_paths = list(
+            filter(
+                None,
+                os.getenv("VIDEO_LIB_ROOTS").split(":"),
+            ),
         )
+        db_file = os.getenv("VIDEO_LIB_DB")
+        self.__lib = datelib.DateLib(scan_paths, db_file)
 
-    def process_one(self, filename):
+    def upload_video(self, fname):
         pass
 
-    def process_dir(self, dirname, filenames):
-        self.concatenate(
-            [os.path.join(dirname, fn) for fn in filenames],
-            "/mnt/multimedia/tmp/00_test_concat.mp4",
-        )
+    def process_date(self, date):
+        logging.info(f"Start: {date}")
+        fnames = []
+        texts = []
+        for af in self.__lib.get_files_by_date(date):
+            fnames.append(af.name())
+            texts.append(af.load_json())
 
+        logging.info(f"found {len(fnames)} files")
 
-def __on_walk_error(err):
-    logging.error('Scan files error: %s' % err)
+        tempfilename = "/mnt/multimedia/tmp/00_test_concat.mp4"
+        concatenate_to_mp4(fnames, tempfilename)
+        self.upload_video(tempfilename)
 
+        logging.info(f"Done: {date}")
 
-def __scan_files(inpath):
-    res = []
-    for root, dirs, files in os.walk(inpath, onerror=__on_walk_error):
-        if len(files) != 0:
-            res.append((root, sorted(files)))
+    def process_all(self, dirname, filenames):
+        nonprocessed = list(self.__lib.get_nonprocessed())
 
-    res.sort()
-    logging.info(f"Found {len(res)} folders")
-    return res
+        pbar = progressbar.ProgressBar(
+            maxval=len(nonprocessed),
+            widgets=[
+                "Process",
+                ' ',
+                progressbar.Percentage(),
+                ' ',
+                progressbar.Bar(),
+                ' ',
+                progressbar.ETA(),
+            ],
+        ).start()
+
+        for date, url in nonprocessed:
+            try:
+                self.process_date(date)
+            except Exception:
+                logging.exception("Video processing failed")
+            pbar.increment()
+
+        pbar.finish()
 
 
 def __args_parse():
     parser = argparse.ArgumentParser()
-    parser.add_argument('inpath', help='Input path')
+    parser.add_argument('date', help='Date to process')
     parser.add_argument('-l', '--logfile', help='Log file', default=None)
     parser.add_argument(
         '-u', '--update', help='Update existing', action='store_true'
@@ -129,40 +159,11 @@ def main():
 
     vp = VideoProcessor(args.update)
 
-    if os.path.isfile(args.inpath):
-        vp.process_one(args.inpath)
-        return
+    if args.date is None:
+        vp.process_all()
+    else:
+        vp.process_date(args.date)
 
-    if not os.path.isdir(args.inpath):
-        logging.info("Not a folder")
-        return
-
-    dirlist = __scan_files(args.inpath)
-
-    if len(dirlist) == 0:
-        return
-
-    pbar = progressbar.ProgressBar(
-        maxval=len(dirlist),
-        widgets=[
-            "Transcribe",
-            ' ',
-            progressbar.Percentage(),
-            ' ',
-            progressbar.Bar(),
-            ' ',
-            progressbar.ETA(),
-        ],
-    ).start()
-
-    for dr in dirlist:
-        try:
-            vp.process_dir(dr[0], dr[1])
-        except Exception:
-            logging.exception("Video processing failed")
-        pbar.increment()
-
-    pbar.finish()
     logging.info("Done.")
 
 
