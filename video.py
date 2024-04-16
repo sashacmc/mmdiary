@@ -11,6 +11,10 @@ from moviepy.editor import VideoFileClip, concatenate_videoclips
 import moviepy.video.fx.all as vfx
 
 
+def add_round2(n):
+    return n - n // 2 * 2
+
+
 def resize_with_black_padding(clip, new_width=None, new_height=None):
     if new_width == clip.w and new_height == clip.h:
         return clip
@@ -32,11 +36,14 @@ def resize_with_black_padding(clip, new_width=None, new_height=None):
 
     print(f"Image size: {image_width}x{image_height}")
     resized_clip = clip.resize(width=image_width, height=image_height)
+    # correction to have result divisible by 2
+    add_w = add_round2(resized_clip.w)
+    add_h = add_round2(resized_clip.h)
     res = resized_clip.fx(
         vfx.margin,
-        left=(new_width - image_width) // 2,
+        left=(new_width - image_width) // 2 + add_w,
         right=(new_width - image_width) // 2,
-        top=(new_height - image_height) // 2,
+        top=(new_height - image_height) // 2 + add_h,
         bottom=(new_height - image_height) // 2,
         color=(0, 0, 0),
     )  # Black color padding
@@ -48,11 +55,22 @@ def resize_with_black_padding(clip, new_width=None, new_height=None):
     return res
 
 
-def concatenate_to_mp4(filenames, outputfile):
-    clips = [VideoFileClip(c) for c in filenames]
+def rotate_if_needs(c):
+    if c.rotation in (90, 270):
+        c = c.resize(c.size[::-1])
+        c.rotation = 0
+    return c
 
-    max_height = max([c.h for c in clips])
-    max_width = max([c.w for c in clips])
+
+def concatenate_to_mp4(filenames, outputfile):
+    clips = [rotate_if_needs(VideoFileClip(f)) for f in filenames]
+
+    max_height = 0
+    max_width = 0
+    for c in clips:
+        if c.w > max_width:
+            max_width = c.w
+            max_height = c.h
 
     clips = [
         resize_with_black_padding(c, max_width, max_height) for c in clips
