@@ -55,6 +55,11 @@ class AudioLib(object):
             root = os.getenv("AUDIO_NOTES_ROOT")
         self.__root = root
 
+        self.__supported_exts = []
+        for ext, tp in g_fileprop.EXT_TO_TYPE.items():
+            if tp in (fileprop.AUDIO, fileprop.VIDEO):
+                self.__supported_exts.append(ext)
+
     def __on_walk_error(self, err):
         logging.error('scan files error: %s' % err)
 
@@ -64,7 +69,7 @@ class AudioLib(object):
             dup = set()
             for fname in files:
                 base, ext = os.path.splitext(fname)
-                if ext != JSON_EXT:
+                if ext.lower() in self.__supported_exts:
                     if base in dup:
                         logging.error('duplicate %s in %s' % (base, root))
                     res.append(os.path.join(root, fname))

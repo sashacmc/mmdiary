@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import os
+import log
 import logging
 import audiolib
 import sqlite3
@@ -30,6 +31,9 @@ class DateLib(object):
 
         self.__scan_paths = scan_paths
 
+    def __del__(self):
+        self.__conn.commit()
+
     def check_file(self, filename):
         c = self.__conn.cursor()
         res = c.execute(
@@ -40,6 +44,7 @@ class DateLib(object):
         return len(res.fetchall()) != 0
 
     def add_file(self, date, filename):
+        logging.debug(f"Add: {filename} to {date}")
         c = self.__conn.cursor()
         c.execute("begin")
         try:
@@ -49,34 +54,81 @@ class DateLib(object):
                  VALUES (?, ?)",
                 (date, filename),
             )
-            # TODO: check for update
             c.execute(
-                "INSERT OR REPLACE \
+                "INSERT \
                  INTO dates (date, processed) \
-                 VALUES (?, ?)",
-                (date, False),
+                 VALUES (?, False) \
+                 ON CONFLICT(date) \
+                 DO UPDATE \
+                 SET processed=False",
+                (date,),
             )
             c.execute("commit")
         except Exception:
             c.execute("rollback")
             logging.exception("add_file failed")
 
+    def set_processed(self, date, url):
+        c = self.__conn.cursor()
+        c.execute(
+            "UPDATE dates \
+             SET processed=True, url=? \
+             WHERE date=?",
+            (url, date),
+        )
+        return c.rowcount == 1
+
+    def get_nonprocessed(self):
+        c = self.__conn.cursor()
+        res = c.execute(
+            "SELECT date, url FROM dates \
+                              WHERE processed=False \
+                              ORDER BY date",
+        )
+        return res.fetchall()
+
+    def get_files_by_date(self, date):
+        c = self.__conn.cursor()
+        res = c.execute(
+            "SELECT filename FROM files \
+                             WHERE date=?",
+            (date,),
+        )
+        afs = [audiolib.AudioFile(row[0]) for row in res.fetchall()]
+        afs.sort(key=lambda af: af.prop().time())
+        return afs
+
     def scan(self):
         for path in self.__scan_paths:
+            logging.info(f"Process: {path}")
             al = audiolib.AudioLib(path)
             for af in al.get_processed():
                 fname = af.name()
                 if not self.check_file(fname):
                     prop = af.prop()
-                    date = prop.time().strftime("%Y-%m-%d")
+                    time = prop.time()
+                    if time is None:
+                        continue
+                    date = time.strftime("%Y-%m-%d")
                     self.add_file(date, fname)
 
 
 def main():
-    scan_paths = "/mnt/multimedia/NEW/Video/".split(":")
-    db_file = "test.sqlite3"
+    log.initLogger(level=logging.DEBUG)
+    scan_paths = list(
+        filter(
+            None,
+            os.getenv("VIDEO_LIB_ROOTS").split(":"),
+        ),
+    )
+    db_file = os.getenv("VIDEO_LIB_DB")
     lib = DateLib(scan_paths, db_file)
     lib.scan()
+    # print(lib.set_processed("2012-01-20", "some_url"))
+    # for date, url in lib.get_nonprocessed():
+    #    print(date, url)
+    #    for af in lib.get_files_by_date(date):
+    #        print("\t", af)
 
 
 if __name__ == "__main__":
