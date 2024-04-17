@@ -10,6 +10,8 @@ import datelib
 from moviepy.editor import VideoFileClip, concatenate_videoclips
 import moviepy.video.fx.all as vfx
 
+import googleapiclient.discovery
+
 
 def add_round2(n):
     return n - n // 2 * 2
@@ -76,6 +78,9 @@ def concatenate_to_mp4(filenames, outputfile):
         resize_with_black_padding(c, max_width, max_height) for c in clips
     ]
 
+    durations = [c.duration for c in clips]
+    logging.info(durations)
+
     final_clip = concatenate_videoclips(clips)
 
     final_clip.write_videofile(
@@ -103,6 +108,53 @@ def concatenate_to_mp4(filenames, outputfile):
         ],
     )
 
+    return durations
+
+
+def get_youtube_credentials(client_secrets, token_file):
+    scopes = ["https://www.googleapis.com/auth/youtube.upload"]
+
+    if os.path.exists(token_file):
+        from google.oauth2.credentials import Credentials
+
+        return Credentials.from_authorized_user_file(token_file, scopes=scopes)
+
+    import google_auth_oauthlib.flow
+
+    flow = google_auth_oauthlib.flow.InstalledAppFlow.from_client_secrets_file(
+        client_secrets,
+        scopes=scopes,
+        redirect_uri="urn:ietf:wg:oauth:2.0:oob",
+    )
+    authorization_url, _ = flow.authorization_url(
+        access_type="offline", prompt="consent"
+    )
+
+    print(f"Please go to this URL and authorize access: {authorization_url}")
+    authorization_code = input("Enter the authorization code: ")
+
+    flow.fetch_token(code=authorization_code)
+    credentials = flow.credentials
+
+    with open(token_file, "w") as token:
+        token.write(credentials.to_json())
+
+    return credentials
+
+
+def seconds_to_time(seconds):
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    seconds = seconds % 60
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+
+def generate_description(time_labels):
+    description = ""
+    for time, label in time_labels:
+        description += f"{time} - {label}\n"
+    return description
+
 
 class VideoProcessor(object):
     def __init__(self, update_existing):
@@ -115,23 +167,62 @@ class VideoProcessor(object):
         )
         db_file = os.getenv("VIDEO_LIB_DB")
         self.__lib = datelib.DateLib(scan_paths, db_file)
+        self.__credentials = get_youtube_credentials(
+            "client_secrets.json", "token.json"
+        )
 
-    def upload_video(self, fname):
-        pass
+    def upload_video(self, fname, title, time_labels):
+        youtube = googleapiclient.discovery.build(
+            "youtube", "v3", credentials=self.__credentials
+        )
+
+        # Upload video
+        request_body = {
+            "snippet": {
+                "title": title,
+                "description": generate_description(time_labels),
+                "tags": ["daily"],
+            },
+            "status": {"privacyStatus": "unlisted"},
+        }
+
+        media_file = googleapiclient.http.MediaFileUpload(
+            fname, chunksize=-1, resumable=True
+        )
+        response_upload = (
+            youtube.videos()
+            .insert(
+                part="snippet,status", body=request_body, media_body=media_file
+            )
+            .execute()
+        )
+
+        vid = response_upload["id"]
+        logging.info(f"Video uploaded: {vid}")
 
     def process_date(self, date):
         logging.info(f"Start: {date}")
-        fnames = []
-        texts = []
-        for af in self.__lib.get_files_by_date(date):
-            fnames.append(af.name())
-            texts.append(af.load_json())
-
+        afiles = self.__lib.get_files_by_date(date)
+        fnames = [af.name() for af in afiles]
         logging.info(f"found {len(fnames)} files")
 
         tempfilename = "/mnt/multimedia/tmp/00_test_concat.mp4"
-        concatenate_to_mp4(fnames, tempfilename)
-        self.upload_video(tempfilename)
+        durations = concatenate_to_mp4(fnames, tempfilename)
+
+        time_labels = []
+        pos = 0
+        for af, duration in zip(afiles, durations):
+            time = af.prop().time().strftime("%H:%M:%S")
+            caption = af.load_json()["caption"].strip()
+            pos += duration
+
+            time_labels.append(
+                (seconds_to_time(int(pos)), f"[{time}] {caption}")
+            )
+
+        logging.info(time_labels)
+
+        self.upload_video(tempfilename, date, time_labels)
 
         logging.info(f"Done: {date}")
 

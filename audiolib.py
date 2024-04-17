@@ -15,6 +15,7 @@ g_fileprop = fileprop.FileProp(pi_config.Config())
 class AudioFile(object):
     def __init__(self, filename):
         self.__filename = filename
+        self.__prop = None
 
     def name(self):
         return self.__filename
@@ -37,7 +38,9 @@ class AudioFile(object):
             json.dump(cont, f, ensure_ascii=False, indent=2)
 
     def prop(self):
-        return g_fileprop.get(self.name())
+        if self.__prop is None:
+            self.__prop = g_fileprop.get(self.name())
+        return self.__prop
 
     def __lt__(self, other):
         return self.__filename < other.__filename
