@@ -15,6 +15,8 @@ import moviepy.video.fx.all as vfx
 
 import googleapiclient.discovery
 
+YOUTUBE_MAX_DESCRIPTION = 5000
+
 
 def add_round2(n):
     return n - n // 2 * 2
@@ -118,7 +120,7 @@ FFMPEG_PARAMS = [
 ]
 
 
-def concatenate_to_mp4(filenames, outputfile):
+def concatenate_to_mp4(filenames, outputfile, dry_run=False):
     clips_info = []
     for f in filenames:
         with VideoFileClip(f) as c:
@@ -138,24 +140,26 @@ def concatenate_to_mp4(filenames, outputfile):
     with tempfile.TemporaryDirectory() as tmpdirname:
         for i, f in enumerate(filenames):
             try:
+                tfname = os.path.join(tmpdirname, f"{i}.mp4")
                 with VideoFileClip(f) as c:
-                    # c = rotate_if_needs(c)
-                    # c = resize_with_black_padding(c, max_width, max_height)
-                    # tfname = os.path.join(tmpdirname, f"{i}.mp4")
-                    # logging.info(f"saving '{c.filename}' to '{tfname}'")
-                    # c.write_videofile(
-                    #    tfname,
-                    #    codec=FFMPEG_CODEC,
-                    #    ffmpeg_params=FFMPEG_PARAMS,
-                    #    fps=FFMPEG_FPS,
-                    # )
+                    if not dry_run:
+                        c = rotate_if_needs(c)
+                        c = resize_with_black_padding(c, max_width, max_height)
+                        logging.info(f"saving '{c.filename}' to '{tfname}'")
+                        c.write_videofile(
+                            tfname,
+                            codec=FFMPEG_CODEC,
+                            ffmpeg_params=FFMPEG_PARAMS,
+                            fps=FFMPEG_FPS,
+                        )
                     durations.append(c.duration)
                     tmpfilenames.append(tfname)
-                    # c.close()
+                    c.close()
             except Exception:
-                logging.error("file '{f}' processing failed")
+                logging.exception("file '{f}' processing failed")
 
-        # concatenate_by_ffmpeg(tmpfilenames, outputfile, tmpdirname)
+        if not dry_run:
+            concatenate_by_ffmpeg(tmpfilenames, outputfile, tmpdirname)
 
     logging.info(f"file saved: {outputfile}")
     return durations
@@ -193,17 +197,48 @@ def get_youtube_credentials(client_secrets, token_file):
 
 
 def seconds_to_time(seconds):
-    hours = seconds // 3600
-    minutes = (seconds % 3600) // 60
+    minutes = seconds // 60
     seconds = seconds % 60
-    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+    return f"{minutes:02d}:{seconds:02d}"
+
+
+def generate_description_full(time_labels):
+    description = ""
+    pos = 0.0
+    for duration, label in time_labels:
+        time = seconds_to_time(int(pos))
+        description += f"{time} - {label}\n"
+        pos += duration
+    logging.info(f"full description len: {len(description)}")
+    return description
+
+
+def generate_description_redused(time_labels):
+    description = ""
+    pos = 0.0
+    last_pos = -100
+    for duration, label in time_labels:
+        if pos - last_pos > 20 and len(label) > 15:  # sec
+            time = seconds_to_time(int(pos))
+            label = label[:50]
+            description += f"{time} - {label}\n"
+            last_pos = pos
+        pos += duration
+    logging.info(f"reduced description len: {len(description)}")
+    return description
 
 
 def generate_description(time_labels):
-    description = ""
-    for time, label in time_labels:
-        description += f"{time} - {label}\n"
-    return description
+    description = generate_description_full(time_labels)
+    if len(description) < YOUTUBE_MAX_DESCRIPTION:
+        return description
+
+    description = generate_description_redused(time_labels)
+    if len(description) < YOUTUBE_MAX_DESCRIPTION:
+        return description
+
+    logging.warn("description cutted")
+    return description[:YOUTUBE_MAX_DESCRIPTION]
 
 
 class VideoProcessor(object):
@@ -257,17 +292,13 @@ class VideoProcessor(object):
         logging.info(f"found {len(fnames)} files")
 
         tempfilename = "/mnt/multimedia/tmp/00_test_concat.mp4"
-        durations = concatenate_to_mp4(fnames, tempfilename)
+        durations = concatenate_to_mp4(fnames, tempfilenam)
 
         time_labels = []
-        pos = 0.0
         for af, duration in zip(afiles, durations):
             time = af.prop().time().strftime("%H:%M:%S")
             caption = af.load_json()["caption"].strip()
-            time_labels.append(
-                (seconds_to_time(int(pos)), f"[{time}] {caption}")
-            )
-            pos += duration
+            time_labels.append((duration, f"[{time}] {caption}"))
 
         logging.info(time_labels)
 
