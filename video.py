@@ -6,8 +6,11 @@ import progressbar
 import logging
 import argparse
 import datelib
+import tempfile
+import subprocess
 
-from moviepy.editor import VideoFileClip, concatenate_videoclips
+from moviepy.video.io.VideoFileClip import VideoFileClip
+from moviepy.video.fx.resize import resize
 import moviepy.video.fx.all as vfx
 
 import googleapiclient.discovery
@@ -25,7 +28,7 @@ def resize_with_black_padding(clip, new_width=None, new_height=None):
     dst_ratio = new_width / new_height
 
     if src_ratio == dst_ratio:
-        return clip.resize(width=new_width, height=new_height)
+        return clip.fx(resize, width=new_width, height=new_height)
 
     image_width = clip.w
     image_height = clip.h
@@ -37,7 +40,7 @@ def resize_with_black_padding(clip, new_width=None, new_height=None):
         image_width = int(image_height * src_ratio)
 
     print(f"Image size: {image_width}x{image_height}")
-    resized_clip = clip.resize(width=image_width, height=image_height)
+    resized_clip = clip.fx(resize, width=image_width, height=image_height)
     # correction to have result divisible by 2
     add_w = add_round2(resized_clip.w)
     add_h = add_round2(resized_clip.h)
@@ -58,56 +61,103 @@ def resize_with_black_padding(clip, new_width=None, new_height=None):
 
 
 def rotate_if_needs(c):
+    logging.info(f"{c.filename} rotation: {c.rotation}")
     if c.rotation in (90, 270):
-        c = c.resize(c.size[::-1])
+        c = c.fx(resize, c.size[::-1])
         c.rotation = 0
     return c
 
 
+def concatenate_by_ffmpeg(filenames, outputfile, tmpdirname):
+    listfile = os.path.join(tmpdirname, 'list.txt')
+    with open(listfile, 'w') as f:
+        for fname in filenames:
+            f.write(f"file '{fname}'\n")
+
+    command = [
+        'ffmpeg',
+        '-y',
+        '-f',
+        'concat',
+        '-safe',
+        '0',
+        '-i',
+        listfile,
+        '-c',
+        'copy',
+        outputfile,
+    ]
+    logging.info(f"start: {command}")
+    subprocess.run(command)
+    logging.info("ffmpeg done.")
+
+
+FFMPEG_CODEC = "libx264"
+FFMPEG_FPS = 25
+FFMPEG_PARAMS = [
+    "-vf",
+    "yadif,format=yuv420p",  # deinterlace videos if they're interlaced, produce pixel format with 4:2:0 chroma subsampling.
+    "-b:v",
+    "20M",  # set video bitrate.
+    "-bf",
+    "2",  # limit consecutive B-frames to 2
+    "-c:a",
+    "aac",  # use the native encoder to produce an AAC audio stream.
+    "-b:a",
+    "384k",  # sets audio bitrate.
+    "-ac",
+    "2",  # rematrixes audio to stereo.
+    "-ar",
+    "48000",  # resamples audio to 48000 Hz.
+    "-use_editlist",
+    "0",  # avoids writing edit lists
+    "-movflags",
+    "+faststart",  # places moov atom/box at front of the output file.
+    "-fflags",
+    "+genpts",  # Generate presentation timestamps
+]
+
+
 def concatenate_to_mp4(filenames, outputfile):
-    clips = [rotate_if_needs(VideoFileClip(f)) for f in filenames]
+    clips_info = []
+    for f in filenames:
+        with VideoFileClip(f) as c:
+            c = rotate_if_needs(c)
+            clips_info.append({"w": c.w, "h": c.h})
+            c.close()
 
     max_height = 0
     max_width = 0
-    for c in clips:
-        if c.w > max_width:
-            max_width = c.w
-            max_height = c.h
+    for c in clips_info:
+        if c["w"] > max_width:
+            max_width = c["w"]
+            max_height = c["h"]
 
-    clips = [
-        resize_with_black_padding(c, max_width, max_height) for c in clips
-    ]
+    durations = []
+    tmpfilenames = []
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        for i, f in enumerate(filenames):
+            try:
+                with VideoFileClip(f) as c:
+                    # c = rotate_if_needs(c)
+                    # c = resize_with_black_padding(c, max_width, max_height)
+                    # tfname = os.path.join(tmpdirname, f"{i}.mp4")
+                    # logging.info(f"saving '{c.filename}' to '{tfname}'")
+                    # c.write_videofile(
+                    #    tfname,
+                    #    codec=FFMPEG_CODEC,
+                    #    ffmpeg_params=FFMPEG_PARAMS,
+                    #    fps=FFMPEG_FPS,
+                    # )
+                    durations.append(c.duration)
+                    tmpfilenames.append(tfname)
+                    # c.close()
+            except Exception:
+                logging.error("file '{f}' processing failed")
 
-    durations = [c.duration for c in clips]
-    logging.info(durations)
+        # concatenate_by_ffmpeg(tmpfilenames, outputfile, tmpdirname)
 
-    final_clip = concatenate_videoclips(clips)
-
-    final_clip.write_videofile(
-        outputfile,
-        codec="libx264",
-        ffmpeg_params=[
-            "-vf",
-            "yadif,format=yuv420p",  # deinterlace videos if they're interlaced, produce pixel format with 4:2:0 chroma subsampling.
-            "-crf",
-            "18",  # produce a visually lossless file. Better than setting a bitrate manually.
-            "-bf",
-            "2",  # limit consecutive B-frames to 2
-            "-c:a",
-            "aac",  # use the native encoder to produce an AAC audio stream.
-            "-q:a",
-            "1",  # sets the highest quality for the audio. Better than setting a bitrate manually.
-            "-ac",
-            "2",  # rematrixes audio to stereo.
-            "-ar",
-            "48000",  # resamples audio to 48000 Hz.
-            "-use_editlist",
-            "0",  # avoids writing edit lists
-            "-movflags",
-            "+faststart",  # places moov atom/box at front of the output file.
-        ],
-    )
-
+    logging.info(f"file saved: {outputfile}")
     return durations
 
 
@@ -210,15 +260,14 @@ class VideoProcessor(object):
         durations = concatenate_to_mp4(fnames, tempfilename)
 
         time_labels = []
-        pos = 0
+        pos = 0.0
         for af, duration in zip(afiles, durations):
             time = af.prop().time().strftime("%H:%M:%S")
             caption = af.load_json()["caption"].strip()
-            pos += duration
-
             time_labels.append(
                 (seconds_to_time(int(pos)), f"[{time}] {caption}")
             )
+            pos += duration
 
         logging.info(time_labels)
 
@@ -265,6 +314,7 @@ def __args_parse():
 def main():
     args = __args_parse()
     log.initLogger(args.logfile)
+    logging.getLogger("py.warnings").setLevel(logging.ERROR)
 
     vp = VideoProcessor(args.update)
 
