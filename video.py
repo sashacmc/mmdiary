@@ -71,6 +71,9 @@ def rotate_if_needs(c):
 
 
 def concatenate_by_ffmpeg(filenames, outputfile, tmpdirname):
+    if len(filenames) == 0:
+        logging.warning("empty filenames list")
+        return
     listfile = os.path.join(tmpdirname, 'list.txt')
     with open(listfile, 'w') as f:
         for fname in filenames:
@@ -91,7 +94,7 @@ def concatenate_by_ffmpeg(filenames, outputfile, tmpdirname):
     ]
     logging.info(f"start: {command}")
     subprocess.run(command)
-    logging.info("ffmpeg done.")
+    logging.info(f"file saved: {outputfile}")
 
 
 FFMPEG_CODEC = "libx264"
@@ -137,12 +140,21 @@ def concatenate_to_mp4(filenames, outputfile, dry_run=False):
 
     durations = []
     tmpfilenames = []
+
+    # TODO: add detection
+    skip_recode = True
+
+    if dry_run:
+        skip_recode = True
+
     with tempfile.TemporaryDirectory() as tmpdirname:
         for i, f in enumerate(filenames):
             try:
                 tfname = os.path.join(tmpdirname, f"{i}.mp4")
                 with VideoFileClip(f) as c:
-                    if not dry_run:
+                    if skip_recode:
+                        tfname = f
+                    else:
                         c = rotate_if_needs(c)
                         c = resize_with_black_padding(c, max_width, max_height)
                         logging.info(f"saving '{c.filename}' to '{tfname}'")
@@ -161,7 +173,6 @@ def concatenate_to_mp4(filenames, outputfile, dry_run=False):
         if not dry_run:
             concatenate_by_ffmpeg(tmpfilenames, outputfile, tmpdirname)
 
-    logging.info(f"file saved: {outputfile}")
     return durations
 
 
@@ -292,11 +303,11 @@ class VideoProcessor(object):
         logging.info(f"found {len(fnames)} files")
 
         tempfilename = "/mnt/multimedia/tmp/00_test_concat.mp4"
-        durations = concatenate_to_mp4(fnames, tempfilenam)
+        durations = concatenate_to_mp4(fnames, tempfilename)
 
         time_labels = []
         for af, duration in zip(afiles, durations):
-            time = af.prop().time().strftime("%H:%M:%S")
+            time = af.prop().time().strftime("%H: %M: %S")
             caption = af.load_json()["caption"].strip()
             time_labels.append((duration, f"[{time}] {caption}"))
 
