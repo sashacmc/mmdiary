@@ -70,6 +70,32 @@ def rotate_if_needs(c):
     return c
 
 
+REENCODE_FPS = 25
+FFMPEG_CODEC = "libx264"
+FFMPEG_PARAMS = [
+    "-vf",
+    "yadif,format=yuv420p",  # deinterlace videos if they're interlaced, produce pixel format with 4:2:0 chroma subsampling.
+    "-crf",
+    "17",  # produce a visually lossless file. Better than setting a bitrate manually.
+    "-bf",
+    "2",  # limit consecutive B-frames to 2
+    "-c:a",
+    "aac",  # use the native encoder to produce an AAC audio stream.
+    "-q:a",
+    "1",  # sets the highest quality for the audio. Better than setting a bitrate manually.
+    "-ac",
+    "2",  # rematrixes audio to stereo.
+    "-ar",
+    "48000",  # resamples audio to 48000 Hz.
+    "-use_editlist",
+    "0",  # avoids writing edit lists
+    "-movflags",
+    "+faststart",  # places moov atom/box at front of the output file.
+    "-fflags",
+    "+genpts",  # TODO: remove if it not needed
+]
+
+
 def concatenate_by_ffmpeg(filenames, outputfile, tmpdirname):
     if len(filenames) == 0:
         logging.warning("empty filenames list")
@@ -80,81 +106,70 @@ def concatenate_by_ffmpeg(filenames, outputfile, tmpdirname):
             f.write(f"file '{fname}'\n")
 
     command = [
-        'ffmpeg',
-        '-y',
-        '-f',
-        'concat',
-        '-safe',
-        '0',
-        '-i',
+        "ffmpeg",
+        "-y",
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
         listfile,
-        '-c',
-        'copy',
-        outputfile,
+        "-c:v",
+        FFMPEG_CODEC,
     ]
+    command += FFMPEG_PARAMS
+    command.append(outputfile)
     logging.info(f"start: {command}")
     subprocess.run(command)
     logging.info(f"file saved: {outputfile}")
 
 
-FFMPEG_CODEC = "libx264"
-FFMPEG_FPS = 25
-FFMPEG_PARAMS = [
-    "-vf",
-    "yadif,format=yuv420p",  # deinterlace videos if they're interlaced, produce pixel format with 4:2:0 chroma subsampling.
-    "-b:v",
-    "20M",  # set video bitrate.
-    "-bf",
-    "2",  # limit consecutive B-frames to 2
-    "-c:a",
-    "aac",  # use the native encoder to produce an AAC audio stream.
-    "-b:a",
-    "384k",  # sets audio bitrate.
-    "-ac",
-    "2",  # rematrixes audio to stereo.
-    "-ar",
-    "48000",  # resamples audio to 48000 Hz.
-    "-use_editlist",
-    "0",  # avoids writing edit lists
-    "-movflags",
-    "+faststart",  # places moov atom/box at front of the output file.
-    "-fflags",
-    "+genpts",  # Generate presentation timestamps
-]
-
-
 def concatenate_to_mp4(filenames, outputfile, dry_run=False):
-    clips_info = []
-    for f in filenames:
-        with VideoFileClip(f) as c:
-            c = rotate_if_needs(c)
-            clips_info.append({"w": c.w, "h": c.h})
-            c.close()
-
+    reencode = False
+    first_height = None
+    first_width = None
+    first_rotation = None
     max_height = 0
     max_width = 0
-    for c in clips_info:
-        if c["w"] > max_width:
-            max_width = c["w"]
-            max_height = c["h"]
+    for f in filenames:
+        with VideoFileClip(f) as c:
+            if first_height is None:
+                first_height = c.h
+                first_width = c.w
+                first_rotation = c.rotation
+            else:
+                if (
+                    first_height != c.h
+                    or first_width != c.w
+                    or first_rotation != c.rotation
+                ):
+                    reencode = True
+
+            c = rotate_if_needs(c)
+            if c.w > max_width:
+                max_width = c.w
+                max_height = c.h
+            c.close()
+
+    logging.info(
+        f"Result video: width={max_width}, height={max_height}, reencode={reencode}"
+    )
 
     durations = []
     tmpfilenames = []
 
-    # TODO: add detection
-    skip_recode = True
-
     if dry_run:
-        skip_recode = True
+        reencode = False
+
+    # TODO: remove
+    # reencode = True
 
     with tempfile.TemporaryDirectory() as tmpdirname:
         for i, f in enumerate(filenames):
             try:
                 tfname = os.path.join(tmpdirname, f"{i}.mp4")
                 with VideoFileClip(f) as c:
-                    if skip_recode:
-                        tfname = f
-                    else:
+                    if reencode:
                         c = rotate_if_needs(c)
                         c = resize_with_black_padding(c, max_width, max_height)
                         logging.info(f"saving '{c.filename}' to '{tfname}'")
@@ -162,8 +177,11 @@ def concatenate_to_mp4(filenames, outputfile, dry_run=False):
                             tfname,
                             codec=FFMPEG_CODEC,
                             ffmpeg_params=FFMPEG_PARAMS,
-                            fps=FFMPEG_FPS,
+                            fps=REENCODE_FPS,
                         )
+                    else:
+                        tfname = f
+
                     durations.append(c.duration)
                     tmpfilenames.append(tfname)
                     c.close()
@@ -313,7 +331,8 @@ class VideoProcessor(object):
 
         logging.info(time_labels)
 
-        self.upload_video(tempfilename, date, time_labels)
+        # TODO: uncomment
+        # self.upload_video(tempfilename, date, time_labels)
 
         logging.info(f"Done: {date}")
 
