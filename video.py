@@ -11,55 +11,10 @@ import subprocess
 
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from moviepy.video.fx.resize import resize
-import moviepy.video.fx.all as vfx
 
 import googleapiclient.discovery
 
 YOUTUBE_MAX_DESCRIPTION = 5000
-
-
-def add_round2(n):
-    return n - n // 2 * 2
-
-
-def resize_with_black_padding(clip, new_width=None, new_height=None):
-    if new_width == clip.w and new_height == clip.h:
-        return clip
-
-    src_ratio = clip.w / clip.h
-    dst_ratio = new_width / new_height
-
-    if src_ratio == dst_ratio:
-        return clip.fx(resize, width=new_width, height=new_height)
-
-    image_width = clip.w
-    image_height = clip.h
-    if src_ratio > dst_ratio:
-        image_width = new_width
-        image_height = int(image_width / src_ratio)
-    else:
-        image_height = new_height
-        image_width = int(image_height * src_ratio)
-
-    print(f"Image size: {image_width}x{image_height}")
-    resized_clip = clip.fx(resize, width=image_width, height=image_height)
-    # correction to have result divisible by 2
-    add_w = add_round2(resized_clip.w)
-    add_h = add_round2(resized_clip.h)
-    res = resized_clip.fx(
-        vfx.margin,
-        left=(new_width - image_width) // 2 + add_w,
-        right=(new_width - image_width) // 2,
-        top=(new_height - image_height) // 2 + add_h,
-        bottom=(new_height - image_height) // 2,
-        color=(0, 0, 0),
-    )  # Black color padding
-
-    if res.h != new_height or res.w != new_width:
-        raise Exception(
-            f"Incorrect resize: {res.w}x{res.h} != {new_width}x{new_height}"
-        )
-    return res
 
 
 def rotate_if_needs(c):
@@ -70,15 +25,9 @@ def rotate_if_needs(c):
     return c
 
 
-REENCODE_FPS = 25
+REENCODE_FPS = "25"
 FFMPEG_CODEC = "libx264"
 FFMPEG_PARAMS = [
-    "-vf",
-    "yadif,format=yuv420p",  # deinterlace videos if they're interlaced, produce pixel format with 4:2:0 chroma subsampling.
-    "-crf",
-    "17",  # produce a visually lossless file. Better than setting a bitrate manually.
-    "-bf",
-    "2",  # limit consecutive B-frames to 2
     "-c:a",
     "aac",  # use the native encoder to produce an AAC audio stream.
     "-q:a",
@@ -87,12 +36,6 @@ FFMPEG_PARAMS = [
     "2",  # rematrixes audio to stereo.
     "-ar",
     "48000",  # resamples audio to 48000 Hz.
-    "-use_editlist",
-    "0",  # avoids writing edit lists
-    "-movflags",
-    "+faststart",  # places moov atom/box at front of the output file.
-    "-fflags",
-    "+genpts",  # TODO: remove if it not needed
 ]
 
 
@@ -114,8 +57,18 @@ def concatenate_by_ffmpeg(filenames, outputfile, tmpdirname):
         "0",
         "-i",
         listfile,
+        "-vf",
+        "yadif,format=yuv420p",
         "-c:v",
         FFMPEG_CODEC,
+        "-crf",
+        "17",  # produce a visually lossless file. Better than setting a bitrate manually.
+        "-bf",
+        "2",  # limit consecutive B-frames to 2
+        "-use_editlist",
+        "0",  # avoids writing edit lists
+        "-movflags",
+        "+faststart",  # places moov atom/box at front of the output file.
     ]
     command += FFMPEG_PARAMS
     command.append(outputfile)
@@ -124,72 +77,102 @@ def concatenate_by_ffmpeg(filenames, outputfile, tmpdirname):
     logging.info(f"file saved: {outputfile}")
 
 
+def stabilize_by_ffmpeg(in_file, out_file):
+    command = [
+        "ffmpeg",
+        "-i",
+        in_file,
+        "-y",
+        "-vf",
+        "vidstabdetect=stepsize=32:shakiness=10:accuracy=10:result=transforms.trf",
+        "-f",
+        "null",
+        "-",
+    ]
+    logging.info(f"start stab prep: {command}")
+    subprocess.run(command)
+
+    command = [
+        "ffmpeg",
+        "-i",
+        in_file,
+        "-y",
+        "-qp",
+        "0",
+        "-preset",
+        "ultrafast",
+        "-vf",
+        "vidstabtransform=input=transforms.trf:zoom=0:smoothing=10,unsharp=5:5:0.8:3:3:0.4",
+        "-acodec",
+        "copy",
+        "-c:v",
+        FFMPEG_CODEC,
+        out_file,
+    ]
+    logging.info(f"start stab: {command}")
+    subprocess.run(command)
+
+
+def resize_by_ffmpeg(in_file, out_file, w, h):
+    filters = [
+        "yadif",
+        "format=yuv420p",
+        f"scale=w='if(gt(a,{w}/{h}),{w},trunc(oh*a/2)*2)':h='if(gt(a,{w}/{h}),trunc(ow/a/2)*2,{h})'",
+        f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black",
+    ]
+    command = [
+        "ffmpeg",
+        "-i",
+        in_file,
+        "-y",
+        "-r",
+        REENCODE_FPS,
+        "-qp",
+        "0",
+        "-preset",
+        "ultrafast",
+        "-vf",
+        ",".join(filters),
+        "-c:v",
+        FFMPEG_CODEC,
+    ]
+    command += FFMPEG_PARAMS
+    command.append(out_file)
+    logging.info(f"start resize: {command}")
+    subprocess.run(command)
+
+
 def concatenate_to_mp4(filenames, outputfile, dry_run=False):
-    reencode = False
-    first_height = None
-    first_width = None
-    first_rotation = None
     max_height = 0
     max_width = 0
+    durations = []
     for f in filenames:
         with VideoFileClip(f) as c:
-            if first_height is None:
-                first_height = c.h
-                first_width = c.w
-                first_rotation = c.rotation
-            else:
-                if (
-                    first_height != c.h
-                    or first_width != c.w
-                    or first_rotation != c.rotation
-                ):
-                    reencode = True
-
             c = rotate_if_needs(c)
+            durations.append(c.duration)
             if c.w > max_width:
                 max_width = c.w
                 max_height = c.h
             c.close()
 
-    logging.info(
-        f"Result video: width={max_width}, height={max_height}, reencode={reencode}"
-    )
+    logging.info(f"Result video: width={max_width}, height={max_height}")
 
-    durations = []
     tmpfilenames = []
 
     if dry_run:
-        reencode = False
-
-    # TODO: remove
-    # reencode = True
+        return durations
 
     with tempfile.TemporaryDirectory() as tmpdirname:
+        tmpdirname = "/tmp"
         for i, f in enumerate(filenames):
-            try:
-                tfname = os.path.join(tmpdirname, f"{i}.mp4")
-                with VideoFileClip(f) as c:
-                    if reencode:
-                        c = rotate_if_needs(c)
-                        c = resize_with_black_padding(c, max_width, max_height)
-                        logging.info(f"saving '{c.filename}' to '{tfname}'")
-                        c.write_videofile(
-                            tfname,
-                            codec=FFMPEG_CODEC,
-                            ffmpeg_params=FFMPEG_PARAMS,
-                            fps=REENCODE_FPS,
-                        )
-                    else:
-                        tfname = f
+            tfname = os.path.join(tmpdirname, f"{i}.mp4")
+            tfname_stab = os.path.join(tmpdirname, f"{i}_stab.mp4")
+            logging.info(f"saving '{f}' to '{tfname}'")
+            resize_by_ffmpeg(f, tfname, max_width, max_height)
+            stabilize_by_ffmpeg(tfname, tfname_stab)
+            tmpfilenames.append(tfname_stab)
 
-                    durations.append(c.duration)
-                    tmpfilenames.append(tfname)
-                    c.close()
-            except Exception:
-                logging.exception("file '{f}' processing failed")
-
-        if not dry_run:
-            concatenate_by_ffmpeg(tmpfilenames, outputfile, tmpdirname)
+        concatenate_by_ffmpeg(tmpfilenames, outputfile, tmpdirname)
 
     return durations
 
