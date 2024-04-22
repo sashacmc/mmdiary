@@ -6,7 +6,6 @@ import progressbar
 import logging
 import argparse
 import datelib
-import tempfile
 import subprocess
 
 from moviepy.video.io.VideoFileClip import VideoFileClip
@@ -31,7 +30,7 @@ FFMPEG_PARAMS = [
     "-c:a",
     "aac",  # use the native encoder to produce an AAC audio stream.
     "-q:a",
-    "1",  # sets the highest quality for the audio. Better than setting a bitrate manually.
+    "1",  # sets the highest quality for the audio.
     "-ac",
     "2",  # rematrixes audio to stereo.
     "-ar",
@@ -62,7 +61,7 @@ def concatenate_by_ffmpeg(filenames, outputfile, tmpdirname):
         "-c:v",
         FFMPEG_CODEC,
         "-crf",
-        "17",  # produce a visually lossless file. Better than setting a bitrate manually.
+        "17",  # produce a visually lossless file.
         "-bf",
         "2",  # limit consecutive B-frames to 2
         "-use_editlist",
@@ -74,17 +73,19 @@ def concatenate_by_ffmpeg(filenames, outputfile, tmpdirname):
     command.append(outputfile)
     logging.info(f"start: {command}")
     subprocess.run(command)
+    os.unlink(listfile)
     logging.info(f"file saved: {outputfile}")
 
 
-def stabilize_by_ffmpeg(in_file, out_file):
+def stabilize_by_ffmpeg(in_file, out_file, tmpdirname):
+    trffile = os.path.join(tmpdirname, 'transforms.txt')
     command = [
         "ffmpeg",
         "-i",
         in_file,
         "-y",
         "-vf",
-        "vidstabdetect=stepsize=32:shakiness=10:accuracy=10:result=transforms.trf",
+        f"vidstabdetect=stepsize=32:shakiness=10:accuracy=10:result={trffile}",
         "-f",
         "null",
         "-",
@@ -102,7 +103,7 @@ def stabilize_by_ffmpeg(in_file, out_file):
         "-preset",
         "ultrafast",
         "-vf",
-        "vidstabtransform=input=transforms.trf:zoom=0:smoothing=10,unsharp=5:5:0.8:3:3:0.4",
+        f"vidstabtransform=input={trffile}:zoom=0:smoothing=10,unsharp=5:5:0.8:3:3:0.4",
         "-acodec",
         "copy",
         "-c:v",
@@ -111,6 +112,7 @@ def stabilize_by_ffmpeg(in_file, out_file):
     ]
     logging.info(f"start stab: {command}")
     subprocess.run(command)
+    os.unlink(trffile)
 
 
 def resize_by_ffmpeg(in_file, out_file, w, h):
@@ -142,7 +144,9 @@ def resize_by_ffmpeg(in_file, out_file, w, h):
     subprocess.run(command)
 
 
-def concatenate_to_mp4(filenames, outputfile, dry_run=False):
+def concatenate_to_mp4(
+    filenames, outputfile, tmpdirname="/tmp", dry_run=False
+):
     max_height = 0
     max_width = 0
     durations = []
@@ -162,17 +166,20 @@ def concatenate_to_mp4(filenames, outputfile, dry_run=False):
     if dry_run:
         return durations
 
-    with tempfile.TemporaryDirectory() as tmpdirname:
-        tmpdirname = "/tmp"
-        for i, f in enumerate(filenames):
-            tfname = os.path.join(tmpdirname, f"{i}.mp4")
-            tfname_stab = os.path.join(tmpdirname, f"{i}_stab.mp4")
-            logging.info(f"saving '{f}' to '{tfname}'")
-            resize_by_ffmpeg(f, tfname, max_width, max_height)
-            stabilize_by_ffmpeg(tfname, tfname_stab)
-            tmpfilenames.append(tfname_stab)
+    for i, f in enumerate(filenames):
+        tfname = os.path.join(tmpdirname, f"{i}.mp4")
+        tfname_stab = os.path.join(tmpdirname, f"{i}_stab.mp4")
 
-        concatenate_by_ffmpeg(tmpfilenames, outputfile, tmpdirname)
+        logging.info(f"convert '{f}' to '{tfname}'")
+        stabilize_by_ffmpeg(f, tfname_stab, tmpdirname)
+        resize_by_ffmpeg(tfname_stab, tfname, max_width, max_height)
+
+        os.unlink(tfname_stab)
+        tmpfilenames.append(tfname)
+
+    concatenate_by_ffmpeg(tmpfilenames, outputfile, tmpdirname)
+    for f in tmpfilenames:
+        os.unlink(f)
 
     return durations
 
@@ -263,6 +270,12 @@ class VideoProcessor(object):
             ),
         )
         db_file = os.getenv("VIDEO_LIB_DB")
+
+        self.__work_dir = os.getenv("VIDEO_PROCESSOR_WORK_DIR")
+        os.makedirs(self.__work_dir, exist_ok=True)
+        self.__res_dir = os.getenv("VIDEO_PROCESSOR_RES_DIR")
+        os.makedirs(self.__res_dir, exist_ok=True)
+
         self.__lib = datelib.DateLib(scan_paths, db_file)
         self.__credentials = get_youtube_credentials(
             "client_secrets.json", "token.json"
@@ -303,8 +316,8 @@ class VideoProcessor(object):
         fnames = [af.name() for af in afiles]
         logging.info(f"found {len(fnames)} files")
 
-        tempfilename = "/mnt/multimedia/tmp/00_test_concat.mp4"
-        durations = concatenate_to_mp4(fnames, tempfilename)
+        resfilename = os.path.join(self.__res_dir, f"{date}.mp4")
+        durations = concatenate_to_mp4(fnames, resfilename, self.__work_dir)
 
         time_labels = []
         for af, duration in zip(afiles, durations):
@@ -315,7 +328,7 @@ class VideoProcessor(object):
         logging.info(time_labels)
 
         # TODO: uncomment
-        # self.upload_video(tempfilename, date, time_labels)
+        self.upload_video(resfilename, date, time_labels)
 
         logging.info(f"Done: {date}")
 
