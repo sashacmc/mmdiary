@@ -6,12 +6,13 @@ import progressbar
 import logging
 import argparse
 import datelib
+import json
 
-import mixvideoconcat
 
 import googleapiclient.discovery
 
 YOUTUBE_MAX_DESCRIPTION = 5000
+YOUTUBE_URL = "https://www.youtube.com/watch?v="
 
 
 def get_youtube_credentials(client_secrets, token_file):
@@ -90,11 +91,8 @@ def generate_description(time_labels):
     return description[:YOUTUBE_MAX_DESCRIPTION]
 
 
-class VideoProcessor(object):
+class VideoUploader(object):
     def __init__(self, update_existing):
-        self.__update_existing = update_existing
-        self.__work_dir = os.getenv("VIDEO_PROCESSOR_WORK_DIR")
-        os.makedirs(self.__work_dir, exist_ok=True)
         self.__res_dir = os.getenv("VIDEO_PROCESSOR_RES_DIR")
         os.makedirs(self.__res_dir, exist_ok=True)
 
@@ -102,6 +100,10 @@ class VideoProcessor(object):
         self.__credentials = get_youtube_credentials(
             "client_secrets.json", "token.json"
         )
+
+    def __load_json(self, filename):
+        with open(filename, "r") as f:
+            return json.load(f)
 
     def upload_video(self, fname, title, time_labels):
         youtube = googleapiclient.discovery.build(
@@ -130,35 +132,29 @@ class VideoProcessor(object):
         )
 
         vid = response_upload["id"]
-        logging.info(f"Video uploaded: {vid}")
+        return vid
 
     def process_date(self, date):
-        logging.info(f"Start: {date}")
-        afiles = self.__lib.get_files_by_date(date)
-        fnames = [af.name() for af in afiles]
-        logging.info(f"found {len(fnames)} files")
+        logging.info("Upload: %s", date)
 
         resfilename = os.path.join(self.__res_dir, f"{date}.mp4")
-        fileinfos = mixvideoconcat.concat(fnames, resfilename, self.__work_dir)
+        resfilename_json = os.path.join(self.__res_dir, f"{date}.json")
 
-        time_labels = []
-        for af, info in zip(afiles, fileinfos):
-            time = af.prop().time().strftime("%H: %M: %S")
-            caption = af.load_json()["caption"].strip()
-            time_labels.append((info["duration"], f"[{time}] {caption}"))
+        data = self.__load_json(resfilename_json)
+        time_labels = data["time_labels"]
 
-        logging.info(time_labels)
+        vid = self.upload_video(resfilename, date, time_labels)
+        url = YOUTUBE_URL + vid
+        logging.info("Video uploaded: %s", url)
+        self.__lib.set_uploaded(date, url)
 
-        # TODO: uncomment
-        # self.upload_video(resfilename, date, time_labels)
-
-        logging.info(f"Done: {date}")
+        logging.info("Upload done: %s", date)
 
     def process_all(self, dirname, filenames):
-        nonprocessed = list(self.__lib.get_nonprocessed())
+        converted = list(self.__lib.get_converted())
 
         pbar = progressbar.ProgressBar(
-            maxval=len(nonprocessed),
+            maxval=len(converted),
             widgets=[
                 "Process",
                 ' ',
@@ -170,7 +166,7 @@ class VideoProcessor(object):
             ],
         ).start()
 
-        for date, url in nonprocessed:
+        for date, url in converted:
             try:
                 self.process_date(date)
             except Exception:
@@ -182,7 +178,7 @@ class VideoProcessor(object):
 
 def __args_parse():
     parser = argparse.ArgumentParser()
-    parser.add_argument('date', help='Date to process')
+    parser.add_argument("dates", nargs="+", help="Date to process")
     parser.add_argument('-l', '--logfile', help='Log file', default=None)
     parser.add_argument(
         '-u', '--update', help='Update existing', action='store_true'
@@ -195,12 +191,13 @@ def main():
     log.initLogger(args.logfile, logging.DEBUG)
     logging.getLogger("py.warnings").setLevel(logging.ERROR)
 
-    vp = VideoProcessor(args.update)
+    vp = VideoUploader(args.update)
 
-    if args.date is None:
+    if args.dates is None:
         vp.process_all()
     else:
-        vp.process_date(args.date)
+        for date in args.dates:
+            vp.process_date(date)
 
     logging.info("Done.")
 

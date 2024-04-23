@@ -129,15 +129,21 @@ class DateLib(object):
     def set_uploaded(self, date, url):
         return self.__set_processed(date, PROCESSED_UPLOADED, url)
 
-    def get_nonprocessed(self):
+    def __get_by_state(self, processed):
         c = self.__conn.cursor()
         res = c.execute(
             "SELECT date, url FROM dates \
                               WHERE processed=? \
                               ORDER BY date",
-            (PROCESSED_NONE,),
+            (processed,),
         )
         return res.fetchall()
+
+    def get_nonprocessed(self):
+        return self.__get_by_state(PROCESSED_NONE)
+
+    def get_converted(self):
+        return self.__get_by_state(PROCESSED_CONVERTED)
 
     def get_files_by_date(self, date):
         c = self.__conn.cursor()
