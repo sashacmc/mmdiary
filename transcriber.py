@@ -53,7 +53,12 @@ class Transcriber(object):
         logging.info(f"Process file: {file}")
 
         prop = file.prop()
-        if prop.type() not in (fileprop.AUDIO, fileprop.VIDEO):
+        tp = ""
+        if prop.type() == fileprop.AUDIO:
+            tp = "audio"
+        elif prop.type() == fileprop.VIDEO:
+            tp = "video"
+        else:
             logging.info("Not audio file, skip")
             return
 
@@ -64,7 +69,7 @@ class Transcriber(object):
             "caption": self.extract_caption(text),
             "text": text,
             "model": self.__modelname,
-            "type": "audio",
+            "type": tp,
             "source": os.path.split(file.name())[1],
             "duration": self.duration(res),
             "recordtime": prop.time().strftime(TIME_OUT_FORMAT)
