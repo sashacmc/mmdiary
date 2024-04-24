@@ -43,7 +43,7 @@ class VideoProcessor(object):
         resfilename = os.path.join(self.__res_dir, f"{date}.mp4")
         resfilename_json = os.path.join(self.__res_dir, f"{date}.json")
         fileinfos = mixvideoconcat.concat(
-            fnames, resfilename, self.__work_dir, dry_run=True
+            fnames, resfilename, self.__work_dir, dry_run=False
         )
 
         videos_info = []

@@ -45,6 +45,8 @@ class Verifier:
             raise UserWarning("caption: fondu")
         if caption == "Ставьте лайк и подписывайтесь!" and caption == text:
             raise UserWarning("caption: like")
+        if caption == "Спасибо за просмотр!" and caption == text:
+            raise UserWarning("caption: view")
 
     def check_json(self, data):
         if "source" not in data:
