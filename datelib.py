@@ -96,7 +96,6 @@ class DateLib(object):
             res = res.fetchall()
             if len(res) != 1:
                 raise Exception(f"checks processed failed: {res}")
-            logging.info(res)
             if res[0][0] == processed:
                 c.execute("rollback")
                 return False
