@@ -14,7 +14,7 @@ import googleapiclient.discovery
 from transcriber import TIME_OUT_FORMAT
 
 YOUTUBE_MAX_DESCRIPTION = 5000
-YOUTUBE_MAX_COMMENT = 9000
+YOUTUBE_MAX_COMMENT = 8000
 YOUTUBE_URL = "https://www.youtube.com/watch?v="
 
 
@@ -93,7 +93,7 @@ def generate_description(time_labels):
     if len(description) < YOUTUBE_MAX_DESCRIPTION:
         return description
 
-    logging.warn("description cutted")
+    logging.warning("description cutted")
     return description[:YOUTUBE_MAX_DESCRIPTION]
 
 
@@ -125,7 +125,7 @@ class VideoUploader(object):
         comment_text = "\n\n".join([info["text"] for info in data["videos"]])
 
         if len(comment_text) > YOUTUBE_MAX_COMMENT:
-            logging.warn("comment cutted: %i", len(comment_text))
+            logging.warning("comment cutted: %i", len(comment_text))
 
         return comment_text[:YOUTUBE_MAX_COMMENT]
 
@@ -189,7 +189,11 @@ class VideoUploader(object):
         logging.info("Upload: %s", date)
 
         resfilename = os.path.join(self.__res_dir, f"{date}.mp4")
+        if not os.path.exists(resfilename):
+            raise FileNotFoundError(resfilename)
         resfilename_json = os.path.join(self.__res_dir, f"{date}.json")
+        if not os.path.exists(resfilename_json):
+            raise FileNotFoundError(resfilename_json)
 
         data = self.__load_json(resfilename_json)
         time_labels = self.__gen_time_labels(data)
@@ -197,15 +201,19 @@ class VideoUploader(object):
 
         video_id = self.upload_video(resfilename, date, time_labels)
         if video_id is None:
-            return
+            return False
 
-        self.add_comment(video_id, comment_text)
+        try:
+            self.add_comment(video_id, comment_text)
+        except Exception:
+            logging.exception("Add comment failed")
 
         url = YOUTUBE_URL + video_id
         logging.info("Video uploaded: %s", url)
         self.__lib.set_uploaded(date, url)
 
         logging.info("Upload done: %s", date)
+        return True
 
     def process_all(self):
         converted = list(self.__lib.get_converted())
@@ -213,10 +221,11 @@ class VideoUploader(object):
         pbar = progressbar.ProgressBar(
             maxval=len(converted),
             widgets=[
-                "Process",
-                ' ',
+                "Upload: ",
+                progressbar.SimpleProgress(),
+                " (",
                 progressbar.Percentage(),
-                ' ',
+                ") ",
                 progressbar.Bar(),
                 ' ',
                 progressbar.ETA(),
@@ -225,7 +234,8 @@ class VideoUploader(object):
 
         for date, url in converted:
             try:
-                self.process_date(date)
+                if not self.process_date(date):
+                    return
             except Exception:
                 logging.exception("Video processing failed")
             pbar.increment()

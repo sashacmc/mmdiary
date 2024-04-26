@@ -41,10 +41,14 @@ class Verifier:
             raise UserWarning("caption: redactor")
         if caption == "Благодарю за внимание!" and caption == text:
             raise UserWarning("caption: vnimanie")
+        if caption == "Спасибо за внимание!" and caption == text:
+            raise UserWarning("caption: vnimanie2")
         if caption == "Фондю любит тебя!" and caption == text:
             raise UserWarning("caption: fondu")
-        if caption == "Ставьте лайк и подписывайтесь!" and caption == text:
+        if caption == "Ставьте лайк и подписывайтесь!":
             raise UserWarning("caption: like")
+        if caption == "Найдите лайки!":
+            raise UserWarning("caption: like2")
         if caption == "Спасибо за просмотр!" and caption == text:
             raise UserWarning("caption: view")
 

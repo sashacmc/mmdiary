@@ -77,10 +77,11 @@ class VideoProcessor(object):
         pbar = progressbar.ProgressBar(
             maxval=len(nonprocessed),
             widgets=[
-                "Process",
-                ' ',
+                "Process: ",
+                progressbar.SimpleProgress(),
+                " (",
                 progressbar.Percentage(),
-                ' ',
+                ") ",
                 progressbar.Bar(),
                 ' ',
                 progressbar.ETA(),
