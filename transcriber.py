@@ -33,7 +33,7 @@ class Transcriber(object):
                 res += ch
                 if ch in ('\n', '.', '?', '!', ';'):
                     break
-        return res
+        return res.strip()
 
     def to_text(self, res):
         if "segments" in res:

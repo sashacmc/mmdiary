@@ -14,7 +14,7 @@ import googleapiclient.discovery
 from transcriber import TIME_OUT_FORMAT
 
 YOUTUBE_MAX_DESCRIPTION = 5000
-YOUTUBE_MAX_COMMENT = 8000
+YOUTUBE_MAX_COMMENT = 5000
 YOUTUBE_URL = "https://www.youtube.com/watch?v="
 
 
@@ -151,6 +151,7 @@ class VideoUploader(object):
             request = youtube.videos().insert(
                 part="snippet,status", body=request_body, media_body=media_file
             )
+            logging.debug("Upload started: %s", request_body)
             response = request.execute()
             video_id = response["id"]
             return video_id
@@ -182,6 +183,7 @@ class VideoUploader(object):
             },
         )
 
+        logging.debug("Comment started")
         response = request.execute()
         logging.debug(response)
 

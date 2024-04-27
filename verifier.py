@@ -4,12 +4,34 @@ import os
 import argparse
 import json
 
+from datetime import datetime
 from notion.client import NotionClient
 
 import cachedb
 
+from transcriber import TIME_OUT_FORMAT
+
 JSON_EXT = ".json"
 CACHE_DB_FILE = "~/.notion_upload.sqlite3"
+
+HALLUCINATION_TEXTS = [
+    "С вами был Игорь Негода",
+    "Редактор субтитров",
+    "Субтитры подготовлены",
+    "Субтитры делал",
+    "Благодарю за внимание",
+    "Спасибо за внимание",
+    "Фондю любит тебя",
+    "Ставьте лайк и подписывайтесь",
+    "Найдите лайки",
+    "Спасибо за просмотр",
+    "Подписывайтесь на наш канал",
+    "И не забудьте поставить лайк",
+]
+
+RES_OK = 0
+RES_TO_UPDATE = 1
+RES_TO_DELETE = 2
 
 
 class Verifier:
@@ -31,41 +53,97 @@ class Verifier:
             return json.load(f)
 
     def save_json(self, file, cont):
+        cont["processtime"] = datetime.now().strftime(TIME_OUT_FORMAT)
         with open(file, "w", encoding="utf-8") as f:
             json.dump(cont, f, ensure_ascii=False, indent=2)
 
-    def check_caption(self, caption, text):
-        if caption.startswith("С вами был Игорь Негода"):
-            raise UserWarning("caption: negoda")
-        if caption == "Редактор субтитров А.":
-            raise UserWarning("caption: redactor")
-        if caption == "Благодарю за внимание!" and caption == text:
-            raise UserWarning("caption: vnimanie")
-        if caption == "Спасибо за внимание!" and caption == text:
-            raise UserWarning("caption: vnimanie2")
-        if caption == "Фондю любит тебя!" and caption == text:
-            raise UserWarning("caption: fondu")
-        if caption == "Ставьте лайк и подписывайтесь!":
-            raise UserWarning("caption: like")
-        if caption == "Найдите лайки!":
-            raise UserWarning("caption: like2")
-        if caption == "Спасибо за просмотр!" and caption == text:
-            raise UserWarning("caption: view")
+    def has_hall_text(self, s):
+        for hall_text in HALLUCINATION_TEXTS:
+            if hall_text in s:
+                print("Has hall_text:", s)
+                return True
+        return False
 
-    def check_json(self, data):
+    def clean_wrong_symbols(self, s):
+        res = ''
+        for ch in s:
+            if (
+                ('а' <= ch and ch <= 'я')
+                or ('А' <= ch and ch <= 'Я')
+                or ch == 'ё'
+                or ch == 'Ё'
+                or ch in "1234567890+–-—,.;:?!%$«» \n"
+            ):
+                res += ch
+
+        res = res.strip()
+
+        punct_only = True
+        for ch in res:
+            if ch not in "+–-—,.;:?!%$«» ":
+                punct_only = False
+        if punct_only:
+            res = ""
+
+        if res != s:
+            print(f"Has incorrect symbols: '{s}'->'{res}'")
+        return res
+
+    def check_text(self, text):
+        if text == "":
+            return text
+
+        src = text.split("\n")
+        res = []
+        for t in src:
+            if not self.has_hall_text(t):
+                s = self.clean_wrong_symbols(t)
+                if s == "":
+                    print(f"Has empty string (was '{t}')")
+                else:
+                    res.append(s)
+        return "\n".join(res)
+
+    def check_update_data(self, data):
+        res = False
+        new_caption = self.check_text(data["caption"])
+        if new_caption != data["caption"]:
+            # print(new_caption)
+            # print(data["caption"])
+            res = True
+            data["caption"] = new_caption
+
+        new_text = self.check_text(data["text"])
+        if new_text != data["text"]:
+            # print(new_text)
+            # print(data["text"])
+            res = True
+            data["text"] = new_text
+
+        return res
+
+    def check_audio_json(self, data):
         if "source" not in data:
-            return
+            return RES_OK
 
-        for f in ("caption", "recordtime", "processtime", "source"):
+        for f in ("recordtime", "processtime", "source"):
             if len(data.get(f, "").strip()) == 0:
-                raise UserWarning(f"empty {f}")
+                return RES_TO_DELETE
 
-        self.check_caption(data["caption"], data["text"])
+        if self.check_update_data(data):
+            return RES_TO_UPDATE
 
         local_source = self.__local_sources.get(data["source"], None)
         if local_source is not None:
-            raise UserWarning(f"duplicate source: {local_source}")
+            print(f"duplicate source: {local_source}")
+            return RES_TO_DELETE
         self.__local_sources[data["source"]] = data
+        return RES_OK
+
+    def check_video_json(self, data):
+        if self.check_update_data(data):
+            return RES_TO_UPDATE
+        return RES_OK
 
     def get_source_file(self, in_file, src_file):
         return os.path.join(os.path.dirname(in_file), src_file)
@@ -103,40 +181,38 @@ class Verifier:
         os.unlink(file)
         print("removed from fs")
 
-    def cleanup_json(self, data, file):
-        data["caption"] = ""
-        data["text"] = ""
-        self.save_json(file, data)
-        print("cleaned")
-
     def process(self, file):
         data = self.load_json(file)
         tp = data["type"]
         if tp == "audio":
-            self.process_audio(file, data)
+            return self.process_audio(file, data)
         elif tp == "video":
-            self.process_video(file, data)
+            return self.process_video(file, data)
         else:
             print(f"Unsupported type: '{tp}' in file: {file}")
 
     def process_audio(self, file, data):
+        res = True
         uploaded = self.__cache.check_existing_pages(data.get("source", ""))
         source = self.get_source_file(file, data.get("source", ""))
-        try:
-            self.check_json(data)
-        except UserWarning as ex:
-            print(str(ex))
+        check_res = self.check_audio_json(data)
+        if check_res != RES_OK:
+            res = False
             print(file)
             print(source)
             print("notion:", uploaded)
-            if self.ask_for_delete():
+            if check_res == RES_TO_DELETE and self.ask_for_delete():
                 if uploaded is not None:
                     self.delete_from_notion(data["source"], uploaded[1])
                 self.delete_from_fs(source, file)
+            elif check_res == RES_TO_UPDATE and self.ask_for_cleanup():
+                self.save_json(file, data)
+                print("cleaned")
+
             print()
 
         if not self.__sync_notion:
-            return
+            return res
 
         if uploaded is None:
             print("Deleted from notion:")
@@ -145,24 +221,30 @@ class Verifier:
             if self.ask_for_delete():
                 self.delete_from_fs(source, file)
             print()
+        return res
 
     def process_video(self, file, data):
+        res = True
         source = self.get_source_file(file, data.get("source", ""))
-        try:
-            self.check_caption(data["caption"], data["text"])
-        except UserWarning as ex:
-            print(str(ex))
+        check_res = self.check_video_json(data)
+        if check_res != RES_OK:
+            res = False
             print(file)
             print(source)
-            print(data["text"])
             if self.ask_for_cleanup():
-                self.cleanup_json(data, file)
+                self.save_json(file, data)
+                print("cleaned")
             print()
+        return res
 
     def process_list(self, fileslist):
         self.__local_sources = {}
+        errors = 0
         for fname in fileslist:
-            self.process(fname)
+            if not self.process(fname):
+                errors += 1
+
+        print(f"Processed: {len(fileslist)}, errors: {errors}")
 
         if not self.__sync_local:
             return
