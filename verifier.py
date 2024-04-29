@@ -3,13 +3,15 @@
 import os
 import argparse
 import json
+import logging
 
 from datetime import datetime
 from notion.client import NotionClient
 
+import log
 import cachedb
 
-from transcriber import TIME_OUT_FORMAT
+TIME_OUT_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 JSON_EXT = ".json"
 CACHE_DB_FILE = "~/.notion_upload.sqlite3"
@@ -34,6 +36,56 @@ RES_TO_UPDATE = 1
 RES_TO_DELETE = 2
 
 
+def has_hall_text(s):
+    for hall_text in HALLUCINATION_TEXTS:
+        if hall_text in s:
+            logging.debug("Has hall_text: %s", s)
+            return True
+    return False
+
+
+def clean_wrong_symbols(s):
+    res = ''
+    for ch in s:
+        if (
+            ('а' <= ch <= 'я')
+            or ('А' <= ch <= 'Я')
+            or ch == 'ё'
+            or ch == 'Ё'
+            or ch in "1234567890+–-—,.;:?!%$«» \n"
+        ):
+            res += ch
+
+    res = res.strip()
+
+    punct_only = True
+    for ch in res:
+        if ch not in "+–-—,.;:?!%$«» ":
+            punct_only = False
+    if punct_only:
+        res = ""
+
+    if res != s:
+        logging.debug("Has incorrect symbols: '%s'->'%s'", s, res)
+    return res
+
+
+def check_text(text):
+    if text == "":
+        return text
+
+    src = text.split("\n")
+    res = []
+    for t in src:
+        if not has_hall_text(t):
+            s = clean_wrong_symbols(t)
+            if s == "":
+                logging.debug("Has empty string (was '%s')", t)
+            else:
+                res.append(s)
+    return "\n".join(res)
+
+
 class Verifier:
     def __init__(self, dryrun, force, sync):
         self.__dryrun = dryrun
@@ -46,7 +98,7 @@ class Verifier:
         self.__local_sources = {}
 
         if len(self.__cache.list_existing_pages()) == 0:
-            print("Empty cache, exit")
+            logging.warning("Empty cache")
 
     def load_json(self, file):
         with open(file, "r", encoding="utf-8") as f:
@@ -57,66 +109,15 @@ class Verifier:
         with open(file, "w", encoding="utf-8") as f:
             json.dump(cont, f, ensure_ascii=False, indent=2)
 
-    def has_hall_text(self, s):
-        for hall_text in HALLUCINATION_TEXTS:
-            if hall_text in s:
-                print("Has hall_text:", s)
-                return True
-        return False
-
-    def clean_wrong_symbols(self, s):
-        res = ''
-        for ch in s:
-            if (
-                ('а' <= ch and ch <= 'я')
-                or ('А' <= ch and ch <= 'Я')
-                or ch == 'ё'
-                or ch == 'Ё'
-                or ch in "1234567890+–-—,.;:?!%$«» \n"
-            ):
-                res += ch
-
-        res = res.strip()
-
-        punct_only = True
-        for ch in res:
-            if ch not in "+–-—,.;:?!%$«» ":
-                punct_only = False
-        if punct_only:
-            res = ""
-
-        if res != s:
-            print(f"Has incorrect symbols: '{s}'->'{res}'")
-        return res
-
-    def check_text(self, text):
-        if text == "":
-            return text
-
-        src = text.split("\n")
-        res = []
-        for t in src:
-            if not self.has_hall_text(t):
-                s = self.clean_wrong_symbols(t)
-                if s == "":
-                    print(f"Has empty string (was '{t}')")
-                else:
-                    res.append(s)
-        return "\n".join(res)
-
     def check_update_data(self, data):
         res = False
-        new_caption = self.check_text(data["caption"])
+        new_caption = check_text(data["caption"])
         if new_caption != data["caption"]:
-            # print(new_caption)
-            # print(data["caption"])
             res = True
             data["caption"] = new_caption
 
-        new_text = self.check_text(data["text"])
+        new_text = check_text(data["text"])
         if new_text != data["text"]:
-            # print(new_text)
-            # print(data["text"])
             res = True
             data["text"] = new_text
 
@@ -135,7 +136,7 @@ class Verifier:
 
         local_source = self.__local_sources.get(data["source"], None)
         if local_source is not None:
-            print(f"duplicate source: {local_source}")
+            logging.warning("duplicate source: %s", local_source)
             return RES_TO_DELETE
         self.__local_sources[data["source"]] = data
         return RES_OK
@@ -171,25 +172,25 @@ class Verifier:
         self.__cache.remove_from_existing_pages(source)
         block = self.__notion.get_block(bid)
         block.remove()
-        print("removed from notion")
+        logging.info("removed from notion")
 
     def delete_from_fs(self, source, file):
         if os.path.isfile(source):
             os.unlink(source)
         else:
-            print(f"File {source} don't exists")
+            logging.warning("File %s don't exists", source)
         os.unlink(file)
-        print("removed from fs")
+        logging.info("removed from fs")
 
     def process(self, file):
         data = self.load_json(file)
         tp = data["type"]
         if tp == "audio":
             return self.process_audio(file, data)
-        elif tp == "video":
+        if tp == "video":
             return self.process_video(file, data)
-        else:
-            print(f"Unsupported type: '{tp}' in file: {file}")
+        logging.warning("Unsupported type: '%s' in file: %s", tp, file)
+        return RES_OK
 
     def process_audio(self, file, data):
         res = True
@@ -272,6 +273,7 @@ def args_parse():
     parser = argparse.ArgumentParser()
     parser.add_argument('inpath', help='Input path')
     parser.add_argument('-d', '--dryrun', help='Dry run', action='store_true')
+    parser.add_argument('-l', '--logfile', help='Log file', default=None)
     parser.add_argument(
         '-s',
         '--sync',
@@ -293,6 +295,8 @@ def args_parse():
 
 def main():
     args = args_parse()
+    log.initLogger(args.logfile, logging.DEBUG)
+    logging.getLogger("urllib3").setLevel(logging.ERROR)
 
     fileslist = []
     if os.path.isfile(args.inpath):

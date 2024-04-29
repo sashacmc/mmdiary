@@ -1,21 +1,22 @@
 #!/usr/bin/python3
 
-import argparse
-import whisper
 import os
+import argparse
 import logging
+
+from datetime import datetime
+from photo_importer import fileprop
+
+import whisper
 import progressbar
 
 import log
 import audiolib
 
-from photo_importer import fileprop
-from datetime import datetime
-
-TIME_OUT_FORMAT = "%Y-%m-%d %H:%M:%S"
+from verifier import check_text, TIME_OUT_FORMAT
 
 
-class Transcriber(object):
+class Transcriber:
     def __init__(self, model):
         logging.info("Transcriber initialization...")
         self.__model = whisper.load_model(model)
@@ -40,8 +41,7 @@ class Transcriber(object):
             return "\n".join(
                 [s.get("text", "").strip() for s in res["segments"]]
             )
-        else:
-            return ""
+        return ""
 
     def duration(self, res):
         if "segments" in res:
@@ -50,7 +50,7 @@ class Transcriber(object):
         return 0
 
     def process(self, file):
-        logging.info(f"Process file: {file}")
+        logging.info("Process file: %s", file)
 
         prop = file.prop()
         tp = ""
@@ -64,6 +64,7 @@ class Transcriber(object):
 
         res = self.transcribe(file)
         text = self.to_text(res)
+        text = check_text(text)
 
         cont = {
             "caption": self.extract_caption(text),
@@ -80,7 +81,7 @@ class Transcriber(object):
 
         file.save_json(cont)
 
-        logging.info(f"Saved to: {file.json_name()}")
+        logging.info("Saved to: %s", file.json_name())
 
 
 def __args_parse():
@@ -95,7 +96,7 @@ def __args_parse():
 
 def main():
     args = __args_parse()
-    log.initLogger(args.logfile)
+    log.initLogger(args.logfile, logging.DEBUG)
 
     fileslist = []
     if os.path.isfile(args.inpath):

@@ -189,7 +189,7 @@ class NotionUploader(object):
         self.__status["created"] += 1
 
     def check_json(self, data):
-        for f in ("caption", "recordtime", "processtime", "source"):
+        for f in ("recordtime", "processtime", "source"):
             if len(data[f].strip()) == 0:
                 raise Exception(f"Incorrect file: empty {f}")
 

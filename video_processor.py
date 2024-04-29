@@ -1,19 +1,23 @@
 #!/usr/bin/python3
 
 import os
-import log
-import progressbar
+import random
 import logging
 import argparse
-import datelib
 import json
-import mixvideoconcat
+
 from datetime import datetime
 
-from transcriber import TIME_OUT_FORMAT
+import progressbar
+import mixvideoconcat
+
+import log
+import datelib
+
+from verifier import TIME_OUT_FORMAT
 
 
-class VideoProcessor(object):
+class VideoProcessor:
     def __init__(self, update_existing):
         self.__update_existing = update_existing
         self.__work_dir = os.getenv("VIDEO_PROCESSOR_WORK_DIR")
@@ -30,15 +34,15 @@ class VideoProcessor(object):
             "processtime": datetime.now().strftime(TIME_OUT_FORMAT),
             "type": "mergedvideo",
         }
-        with open(filename, "w") as f:
+        with open(filename, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
     def __process_date(self, date):
-        logging.info(f"Start: {date}")
+        logging.info("Start: %s", date)
         starttime = datetime.now()
         afiles = self.__lib.get_files_by_date(date)
         fnames = [af.name() for af in afiles]
-        logging.info(f"found {len(fnames)} files")
+        logging.info("found %i files", len(fnames))
 
         resfilename = os.path.join(self.__res_dir, f"{date}.mp4")
         resfilename_json = os.path.join(self.__res_dir, f"{date}.json")
@@ -57,11 +61,11 @@ class VideoProcessor(object):
         processduration = (datetime.now() - starttime).total_seconds()
         self.__save_json(videos_info, processduration, resfilename_json)
 
-        logging.info(f"Done: {date}")
+        logging.info("Done: %s", date)
 
     def process_date(self, date):
         if not self.__lib.set_in_progress(date):
-            logging.warning(f"date: {date} already in progress")
+            logging.warning("date: %s already in progress", date)
             return
 
         try:
@@ -73,6 +77,7 @@ class VideoProcessor(object):
 
     def process_all(self):
         nonprocessed = list(self.__lib.get_nonprocessed())
+        random.shuffle(nonprocessed)
 
         pbar = progressbar.ProgressBar(
             maxval=len(nonprocessed),
@@ -88,7 +93,7 @@ class VideoProcessor(object):
             ],
         ).start()
 
-        for date, url in nonprocessed:
+        for date, _ in nonprocessed:
             try:
                 self.process_date(date)
             except Exception:
