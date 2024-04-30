@@ -40,7 +40,7 @@ class VideoProcessor:
     def __process_date(self, date):
         logging.info("Start: %s", date)
         starttime = datetime.now()
-        afiles = self.__lib.get_files_by_date(date)
+        afiles = self.__lib.get_files_by_date(date, for_upload=True)
         fnames = [af.name() for af in afiles]
         logging.info("found %i files", len(fnames))
 

@@ -1,10 +1,12 @@
 #!/usr/bin/python3
 
 import os
-import log
 import logging
-import audiolib
+import argparse
 import sqlite3
+
+import log
+import audiolib
 
 from audiolib import get_date_from_timestring
 
@@ -31,7 +33,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS dates_date ON dates (date);
 '''
 
 
-class DateLib(object):
+class DateLib:
     def __init__(self, scan_paths=None, db_file=None):
         if scan_paths is None:
             scan_paths = list(
@@ -58,10 +60,13 @@ class DateLib(object):
                          WHERE filename=?",
             (filename,),
         )
-        return len(res.fetchall()) != 0
+        res = res.fetchall()
+        if len(res) == 0:
+            return None
+        return res[0][0]
 
     def add_file(self, date, filename):
-        logging.debug(f"Add: {filename} to {date}")
+        logging.debug("Add: %s to %s", filename, date)
         c = self.__conn.cursor()
         try:
             c.execute(
@@ -94,19 +99,27 @@ class DateLib(object):
             )
             res = res.fetchall()
             if len(res) != 1:
-                raise Exception(f"checks processed failed: {res}")
+                raise UserWarning(f"checks processed failed: {res}")
             if res[0][0] == processed:
                 c.execute("rollback")
                 return False
 
-            c.execute(
-                "UPDATE dates \
-                 SET processed=?, url=? \
-                 WHERE date=?",
-                (processed, url, date),
-            )
+            if url is None:
+                c.execute(
+                    "UPDATE dates \
+                     SET processed=? \
+                     WHERE date=?",
+                    (processed, date),
+                )
+            else:
+                c.execute(
+                    "UPDATE dates \
+                     SET processed=?, url=? \
+                     WHERE date=?",
+                    (processed, url, date),
+                )
             if c.rowcount != 1:
-                raise Exception(f"set processed failed: {c.rowcount}")
+                raise UserWarning(f"set processed failed: {c.rowcount}")
 
             c.execute("commit")
             return True
@@ -143,7 +156,7 @@ class DateLib(object):
     def get_converted(self):
         return self.__get_by_state(PROCESSED_CONVERTED)
 
-    def get_files_by_date(self, date):
+    def get_files_by_date(self, date, for_upload=False):
         c = self.__conn.cursor()
         res = c.execute(
             "SELECT filename FROM files \
@@ -151,26 +164,61 @@ class DateLib(object):
             (date,),
         )
         afs = [audiolib.AudioFile(row[0]) for row in res.fetchall()]
-        afs.sort(key=lambda af: af.prop().time())
+        afs.sort(key=lambda af: af.json()["recordtime"])
+        if for_upload:
+            afs = list(filter(lambda af: af.json().get("upload", True), afs))
         return afs
 
     def scan(self):
         for path in self.__scan_paths:
-            logging.info(f"Process: {path}")
+            logging.info("Process: %s", path)
             al = audiolib.AudioLib(path)
             for af in al.get_processed():
                 fname = af.name()
-                if not self.check_file(fname):
-                    data = af.load_json()
+                if self.check_file(fname) is None:
                     self.add_file(
-                        get_date_from_timestring(data["recordtime"]), fname
+                        get_date_from_timestring(af.json()["recordtime"]),
+                        fname,
                     )
+
+    def disable_video(self, filename):
+        date = self.check_file(filename)
+        if date is None:
+            logging.warning("File not in DB")
+
+        af = audiolib.AudioFile(filename)
+        data = af.json()
+        data["upload"] = False
+        af.save_json(data)
+
+        self.set_not_processed(date)
+
+
+def __args_parse():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '-a',
+        '--action',
+        help='Action',
+        required=True,
+        choices=[
+            'scan',
+            'disable_video',
+        ],
+    )
+    parser.add_argument('-f', '--file', help='File name')
+    return parser.parse_args()
 
 
 def main():
+    args = __args_parse()
     log.initLogger(level=logging.DEBUG)
     lib = DateLib()
-    lib.scan()
+
+    if args.action == 'scan':
+        lib.scan()
+    if args.action == 'disable_video':
+        lib.disable_video(args.file)
 
 
 if __name__ == "__main__":

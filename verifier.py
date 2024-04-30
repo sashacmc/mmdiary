@@ -21,6 +21,7 @@ HALLUCINATION_TEXTS = [
     "Редактор субтитров",
     "Субтитры подготовлены",
     "Субтитры делал",
+    "Субтитры сделаны с помощью",
     "Благодарю за внимание",
     "Спасибо за внимание",
     "Фондю любит тебя",
@@ -29,6 +30,7 @@ HALLUCINATION_TEXTS = [
     "Спасибо за просмотр",
     "Подписывайтесь на наш канал",
     "И не забудьте поставить лайк",
+    "ФактФронт",
 ]
 
 RES_OK = 0
@@ -271,7 +273,7 @@ def __scan_files(inpath):
 
 def args_parse():
     parser = argparse.ArgumentParser()
-    parser.add_argument('inpath', help='Input path')
+    parser.add_argument('inpath', nargs="+", help='Input path(s)')
     parser.add_argument('-d', '--dryrun', help='Dry run', action='store_true')
     parser.add_argument('-l', '--logfile', help='Log file', default=None)
     parser.add_argument(
@@ -298,14 +300,14 @@ def main():
     log.initLogger(args.logfile, logging.DEBUG)
     logging.getLogger("urllib3").setLevel(logging.ERROR)
 
-    fileslist = []
-    if os.path.isfile(args.inpath):
-        fileslist = (args.inpath,)
-    elif os.path.isdir(args.inpath):
-        fileslist = __scan_files(args.inpath)
-
     vf = Verifier(args.dryrun, args.force, args.sync)
-    vf.process_list(fileslist)
+    fileslist = []
+    for path in args.inpath:
+        if os.path.isfile(path):
+            fileslist = (path,)
+        elif os.path.isdir(path):
+            fileslist = __scan_files(path)
+        vf.process_list(fileslist)
 
 
 if __name__ == '__main__':

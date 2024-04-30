@@ -1,17 +1,20 @@
 #!/usr/bin/python3
 
 import os
-import log
-import progressbar
 import logging
 import argparse
-import datelib
 import json
+
 from datetime import datetime
+
+import progressbar
 
 import googleapiclient.discovery
 
-from audiolib import TIME_OUT_FORMAT
+import log
+import datelib
+
+from audiolib import TIME_OUT_FORMAT, split_large_text
 
 YOUTUBE_MAX_DESCRIPTION = 5000
 YOUTUBE_MAX_COMMENT = 5000
@@ -46,7 +49,7 @@ def get_youtube_credentials(client_secrets, token_file):
     flow.fetch_token(code=authorization_code)
     credentials = flow.credentials
 
-    with open(token_file, "w") as token:
+    with open(token_file, "w", encoding="utf-8") as token:
         token.write(credentials.to_json())
 
     return credentials
@@ -65,7 +68,7 @@ def generate_description_full(time_labels):
         time = seconds_to_time(int(pos))
         description += f"{time} - {label}\n"
         pos += duration
-    logging.info(f"full description len: {len(description)}")
+    logging.info("full description len: %i", len(description))
     return description
 
 
@@ -80,7 +83,7 @@ def generate_description_redused(time_labels):
             description += f"{time} - {label}\n"
             last_pos = pos
         pos += duration
-    logging.info(f"reduced description len: {len(description)}")
+    logging.info("reduced description len: %i", len(description))
     return description
 
 
@@ -97,8 +100,8 @@ def generate_description(time_labels):
     return description[:YOUTUBE_MAX_DESCRIPTION]
 
 
-class VideoUploader(object):
-    def __init__(self, update_existing):
+class VideoUploader:
+    def __init__(self):
         self.__res_dir = os.getenv("VIDEO_PROCESSOR_RES_DIR")
         os.makedirs(self.__res_dir, exist_ok=True)
 
@@ -108,26 +111,31 @@ class VideoUploader(object):
         )
 
     def __load_json(self, filename):
-        with open(filename, "r") as f:
+        with open(filename, "r", encoding="utf-8") as f:
             return json.load(f)
 
-    def __gen_time_labels(self, data):
+    def __gen_time_labels(
+        self, data, text_field, delimiter=" ", skip_empty=False
+    ):
         time_labels = []
         for info in data["videos"]:
             time = datetime.strptime(
                 info["timestamp"], TIME_OUT_FORMAT
             ).strftime("%H: %M: %S")
-            caption = info["caption"]
-            time_labels.append((info["duration"], f"[{time}] {caption}"))
+            caption = info[text_field]
+            if len(caption) == 0 and skip_empty:
+                continue
+            time_labels.append(
+                (info["duration"], f"[{time}]{delimiter}{caption}")
+            )
         return time_labels
 
-    def __gen_comment(self, data):
-        comment_text = "\n\n".join([info["text"] for info in data["videos"]])
-
-        if len(comment_text) > YOUTUBE_MAX_COMMENT:
-            logging.warning("comment cutted: %i", len(comment_text))
-
-        return comment_text[:YOUTUBE_MAX_COMMENT]
+    def __gen_comments(self, data):
+        time_labels = self.__gen_time_labels(
+            data, "text", delimiter="\n", skip_empty=True
+        )
+        comment_text = generate_description_full(time_labels)
+        return split_large_text(comment_text, YOUTUBE_MAX_COMMENT)
 
     def upload_video(self, fname, title, time_labels):
         youtube = googleapiclient.discovery.build(
@@ -162,8 +170,14 @@ class VideoUploader(object):
             ):
                 logging.error("quotaExceeded")
                 return None
-            else:
-                raise
+            if (
+                ex.status_code == 400
+                and ex.error_details[0]["reason"] == "uploadLimitExceeded"
+            ):
+                logging.error("uploadLimitExceeded")
+                return None
+
+            raise
 
     def add_comment(self, video_id, comment_text):
         youtube = googleapiclient.discovery.build(
@@ -198,17 +212,19 @@ class VideoUploader(object):
             raise FileNotFoundError(resfilename_json)
 
         data = self.__load_json(resfilename_json)
-        time_labels = self.__gen_time_labels(data)
-        comment_text = self.__gen_comment(data)
+        time_labels = self.__gen_time_labels(data, "caption")
+        comments_text = self.__gen_comments(data)
+        logging.debug(comments_text)
 
         video_id = self.upload_video(resfilename, date, time_labels)
         if video_id is None:
             return False
 
-        try:
-            self.add_comment(video_id, comment_text)
-        except Exception:
-            logging.exception("Add comment failed")
+        for comment_text in comments_text:
+            try:
+                self.add_comment(video_id, comment_text)
+            except Exception:
+                logging.exception("Add comment failed")
 
         url = YOUTUBE_URL + video_id
         logging.info("Video uploaded: %s", url)
@@ -234,7 +250,7 @@ class VideoUploader(object):
             ],
         ).start()
 
-        for date, url in converted:
+        for date, _ in converted:
             try:
                 if not self.process_date(date):
                     return
@@ -249,9 +265,6 @@ def __args_parse():
     parser = argparse.ArgumentParser()
     parser.add_argument("dates", nargs="*", help="Date to process")
     parser.add_argument('-l', '--logfile', help='Log file', default=None)
-    parser.add_argument(
-        '-u', '--update', help='Update existing', action='store_true'
-    )
     return parser.parse_args()
 
 
@@ -260,7 +273,7 @@ def main():
     log.initLogger(args.logfile, logging.DEBUG)
     logging.getLogger("py.warnings").setLevel(logging.ERROR)
 
-    vp = VideoUploader(args.update)
+    vp = VideoUploader()
 
     if len(args.dates) == 0:
         vp.process_all()

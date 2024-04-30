@@ -18,6 +18,7 @@ class AudioFile(object):
     def __init__(self, filename):
         self.__filename = filename
         self.__prop = None
+        self.__json = None
 
     def name(self):
         return self.__filename
@@ -38,6 +39,12 @@ class AudioFile(object):
     def save_json(self, cont):
         with open(self.json_name(), "w") as f:
             json.dump(cont, f, ensure_ascii=False, indent=2)
+        self.__json = cont
+
+    def json(self):
+        if self.__json is None:
+            self.__json = self.load_json()
+        return self.__json
 
     def prop(self):
         if self.__prop is None:
