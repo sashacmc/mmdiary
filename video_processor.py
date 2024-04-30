@@ -14,7 +14,7 @@ import mixvideoconcat
 import log
 import datelib
 
-from verifier import TIME_OUT_FORMAT
+from audiolib import TIME_OUT_FORMAT
 
 
 class VideoProcessor:

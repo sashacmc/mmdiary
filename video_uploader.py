@@ -11,7 +11,7 @@ from datetime import datetime
 
 import googleapiclient.discovery
 
-from transcriber import TIME_OUT_FORMAT
+from audiolib import TIME_OUT_FORMAT
 
 YOUTUBE_MAX_DESCRIPTION = 5000
 YOUTUBE_MAX_COMMENT = 5000

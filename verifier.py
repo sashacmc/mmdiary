@@ -11,9 +11,9 @@ from notion.client import NotionClient
 import log
 import cachedb
 
-TIME_OUT_FORMAT = "%Y-%m-%d %H:%M:%S"
 
-JSON_EXT = ".json"
+from audiolib import TIME_OUT_FORMAT, JSON_EXT
+
 CACHE_DB_FILE = "~/.notion_upload.sqlite3"
 
 HALLUCINATION_TEXTS = [

@@ -155,7 +155,7 @@ class NotionUploader(object):
 
         bid = self.add_row(
             title=data["caption"],
-            date=data["recordtime"][:10],
+            date=audiolib.get_date_from_timestring(data["recordtime"]),
             source=data["source"],
             processtime=data["processtime"],
             icon="🎙️",

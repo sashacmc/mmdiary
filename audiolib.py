@@ -7,6 +7,8 @@ import logging
 from photo_importer import fileprop
 from photo_importer import config as pi_config
 
+TIME_OUT_FORMAT = "%Y-%m-%d %H:%M:%S"
+
 JSON_EXT = ".json"
 
 g_fileprop = fileprop.FileProp(pi_config.Config())
@@ -110,6 +112,10 @@ def split_large_text(text, max_block_size):
         blocks.append("\n".join(block))
 
     return blocks
+
+
+def get_date_from_timestring(time):
+    return time[:10]
 
 
 def main():

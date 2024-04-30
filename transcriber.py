@@ -13,7 +13,8 @@ import progressbar
 import log
 import audiolib
 
-from verifier import check_text, TIME_OUT_FORMAT
+from verifier import check_text
+from audiolib import TIME_OUT_FORMAT
 
 
 class Transcriber:

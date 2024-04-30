@@ -6,6 +6,8 @@ import logging
 import audiolib
 import sqlite3
 
+from audiolib import get_date_from_timestring
+
 PROCESSED_NONE = 0
 PROCESSED_IN_PROCESS = 1
 PROCESSED_CONVERTED = 2
@@ -61,14 +63,7 @@ class DateLib(object):
     def add_file(self, date, filename):
         logging.debug(f"Add: {filename} to {date}")
         c = self.__conn.cursor()
-        c.execute("begin")
         try:
-            c.execute(
-                "INSERT \
-                 INTO files (date, filename) \
-                 VALUES (?, ?)",
-                (date, filename),
-            )
             c.execute(
                 "INSERT \
                  INTO dates (date, processed) \
@@ -78,9 +73,13 @@ class DateLib(object):
                  SET processed=?",
                 (date, PROCESSED_NONE, PROCESSED_NONE),
             )
-            c.execute("commit")
+            c.execute(
+                "INSERT \
+                 INTO files (date, filename) \
+                 VALUES (?, ?)",
+                (date, filename),
+            )
         except Exception:
-            c.execute("rollback")
             logging.exception("add_file failed")
 
     def __set_processed(self, date, processed, url):
@@ -162,23 +161,16 @@ class DateLib(object):
             for af in al.get_processed():
                 fname = af.name()
                 if not self.check_file(fname):
-                    prop = af.prop()
-                    time = prop.time()
-                    if time is None:
-                        continue
-                    date = time.strftime("%Y-%m-%d")
-                    self.add_file(date, fname)
+                    data = af.load_json()
+                    self.add_file(
+                        get_date_from_timestring(data["recordtime"]), fname
+                    )
 
 
 def main():
     log.initLogger(level=logging.DEBUG)
     lib = DateLib()
     lib.scan()
-    # print(lib.set_processed("2012-01-20", "some_url"))
-    # for date, url in lib.get_nonprocessed():
-    #    print(date, url)
-    #    for af in lib.get_files_by_date(date):
-    #        print("\t", af)
 
 
 if __name__ == "__main__":
