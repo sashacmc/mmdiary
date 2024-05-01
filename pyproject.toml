@@ -42,6 +42,15 @@ classifiers = [
 ]
 
 dependencies = [
+	"notion_client",
+	"notion",
+	"progressbar",
+	"telegram",
+	"whisper",
+	"photo_importer",
+	"mixvideoconcat",
+	"googleapiclient",
+	"google",
 ]
 
 [project.urls]
