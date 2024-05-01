@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mmdiary"
+version = "1.0.0"
+description = "Multimedia Diary Tools"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {file = "LICENSE"}
+keywords = ["audio", "video", "multimedia", "tool", "youtube", "notion", "transcriber", "uploader"]
+
+authors = [
+	{ name = "Alexander Bushnev", email = "Alexander@Bushnev.pro" }
+]
+
+maintainers = [
+	{ name = "Alexander Bushnev", email = "Alexander@Bushnev.pro" }
+]
+
+classifiers = [
+	#   3 - Alpha
+  	#   4 - Beta
+  	#   5 - Production/Stable
+  	"Development Status :: 3 - Alpha",
+
+	"Operating System :: POSIX :: Linux",
+	"Operating System :: MacOS",
+	"Programming Language :: Python",
+	"Programming Language :: Python :: 3",
+	"Programming Language :: Python :: 3.6",
+	"Programming Language :: Python :: 3.7",
+	"Programming Language :: Python :: 3.8",
+	"Programming Language :: Python :: 3.9",
+	"Programming Language :: Python :: 3.10",
+	"Programming Language :: Python :: 3.11",
+	"License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+	"Topic :: Multimedia :: Audio",
+	"Topic :: Multimedia :: Video",
+	"Topic :: Utilities",
+]
+
+dependencies = [
+]
+
+[project.urls]
+"Homepage" = "https://github.com/sashacmc/mmdiary"
+"Bug Reports" = "https://github.com/sashacmc/mmdiary/issues"
+"Source" = "https://github.com/sashacmc/mmdiary/"
+"Changelog" = "https://github.com/sashacmc/mmdiary/blob/master/CHANGELOG.md"
+
+[project.scripts]
+mmdiary = "mmdiary:main"
