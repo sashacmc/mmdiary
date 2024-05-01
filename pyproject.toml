@@ -50,7 +50,7 @@ dependencies = [
 	"photo_importer",
 	"mixvideoconcat",
 	"google-auth-oauthlib",
-	"google-api-core",
+	"google-api-python-client",
 ]
 
 [project.urls]
