@@ -61,3 +61,4 @@ dependencies = [
 
 [project.scripts]
 mmdiary = "mmdiary:main"
+mmdiary-telegrambot = "mmdiary.telegrambot.telegrambot_service:main"

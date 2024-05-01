@@ -9,11 +9,19 @@ After=network.target
 
 [Service]
 Type=simple
+StandardInput=tty-force
+
+# replace by your path to env file
+EnvironmentFile=/etc/telegrambot.env
+
+# replace by your istallation path
+ExecStart=/home/sashacmc/.local/bin/mmdiary-telegrambot
+
+# replace by your User/Group
 User=sashacmc
 Group=sashacmc
-EnvironmentFile=/home/sashacmc/src/my/voice-rec-tools/telegrambot.env
-ExecStart=/home/sashacmc/src/my/voice-rec-tools/telegrambot_service.py
-StandardInput=tty-force
+
+# change log files if needs
 StandardOutput=append:/var/log/user/audio-notes-telegrambot.log
 StandardError=append:/var/log/user/audio-notes-telegrambot.log
 
