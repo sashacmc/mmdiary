@@ -49,7 +49,6 @@ dependencies = [
 	"whisper",
 	"photo_importer",
 	"mixvideoconcat",
-	"googleapiclient",
 	"google",
 ]
 
