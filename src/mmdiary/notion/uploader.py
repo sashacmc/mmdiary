@@ -13,6 +13,15 @@ from notion_client import Client
 from mmdiary.utils import log, medialib, progressbar
 from mmdiary.notion import cachedb
 
+DESCRIPTION = """
+Uploads transcribed file(s) to the notion database.
+Please declare enviromnent variables before use:
+    NOTION_TOKEN - Notion web auth token
+    NOTION_API_KEY - Notion API key
+    NOTION_DB_ID - Notion Database ID
+    NOTION_CACHE_DB_FILE - Cachedb file
+"""
+
 
 MAX_TEXT_SIZE = 2000
 
@@ -43,12 +52,12 @@ class NotionUploader:
         self.__database_id = database_id
         self.__notion_api = Client(auth=api_key)
 
-        self.init_existing_pages()
+        self.__init_existing_pages()
 
     def status(self):
         return self.__status
 
-    def init_existing_pages(self):
+    def __init_existing_pages(self):
         cnt = len(self.__cache.list_existing_pages())
         if cnt == 0 and not self.__dry_run:
             logging.info("Cache empty, init...")
@@ -59,12 +68,12 @@ class NotionUploader:
         self.__status["existing"] = cnt
         logging.info("Found existing %i items", cnt)
 
-    def add_existing_page(self, source, processtime, bid):
+    def __add_existing_page(self, source, processtime, bid):
         if not self.__dry_run:
             self.__cache.add_existing_page(source, processtime, bid)
         self.__status["existing"] += 1
 
-    def delete_page(self, source, bid):
+    def __delete_page(self, source, bid):
         logging.debug("remove block %s", bid)
         if not self.__dry_run:
             block = self.__notion.get_block(bid)
@@ -78,7 +87,7 @@ class NotionUploader:
 
         self.__status["removed"] += 1
 
-    def check_existing(self, data, delete):
+    def __check_existing(self, data, delete):
         source = data["source"]
         processtime = data["processtime"]
         page = self.__cache.check_existing_pages(source)
@@ -90,24 +99,24 @@ class NotionUploader:
         if processtime > page[0] and page[0] != "":
             if delete:
                 logging.info("processtime changed: %s > %s for %s", processtime, page[0], source)
-                self.delete_page(source, page[1])
+                self.__delete_page(source, page[1])
             return False
 
         if self.__force_update:
             if delete:
                 logging.info("force update for %s", source)
-                self.delete_page(source, page[1])
+                self.__delete_page(source, page[1])
             return False
 
         return True
 
-    def filter_existing(self, file):
+    def __filter_existing(self, file):
         data = file.load_json()
-        self.check_json(data)
+        self.__check_json(data)
 
-        return not self.check_existing(data, False)
+        return not self.__check_existing(data, False)
 
-    def add_row(self, title, date, source, processtime, icon):
+    def __add_row(self, title, date, source, processtime, icon):
         properties = {
             "title": {"title": [{"text": {"content": title}}]},
             "Date": {"type": "date", "date": {"start": date}},
@@ -139,12 +148,12 @@ class NotionUploader:
 
         return res["id"]
 
-    def create_page(self, data, fname):
+    def __create_page(self, data, fname):
         if self.__dry_run:
             self.__status["created"] += 1
             return
 
-        bid = self.add_row(
+        bid = self.__add_row(
             title=data["caption"],
             date=medialib.get_date_from_timestring(data["recordtime"]),
             source=data["source"],
@@ -169,15 +178,15 @@ class NotionUploader:
 
             res.set("format.block_locked", True)
 
-            self.add_existing_page(data["source"], data["processtime"], res.id)
+            self.__add_existing_page(data["source"], data["processtime"], res.id)
         except Exception:
             logging.warning("Delete uncompleate page for: %s", fname)
-            self.delete_page(None, bid)
+            self.__delete_page(None, bid)
             raise
 
         self.__status["created"] += 1
 
-    def check_json(self, data):
+    def __check_json(self, data):
         for f in ("recordtime", "processtime", "source"):
             if len(data[f].strip()) == 0:
                 raise UserWarning(f"Incorrect file: empty {f}")
@@ -187,17 +196,17 @@ class NotionUploader:
         self.__status["processed"] += 1
 
         data = file.load_json()
-        self.check_json(data)
+        self.__check_json(data)
 
-        if self.check_existing(data, True):
+        if self.__check_existing(data, True):
             return
 
-        self.create_page(data, file.name())
+        self.__create_page(data, file.name())
 
         logging.info("Saved")
 
     def process_list(self, fileslist):
-        fileslist = list(filter(self.filter_existing, fileslist))
+        fileslist = list(filter(self.__filter_existing, fileslist))
 
         self.__status["total"] = len(fileslist)
         pbar = progressbar.start("Uploading", len(fileslist))
@@ -213,17 +222,19 @@ class NotionUploader:
         pbar.finish()
 
 
-def args_parse():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('inpath', help='Input path')
+def __args_parse():
+    parser = argparse.ArgumentParser(
+        description=DESCRIPTION, formatter_class=argparse.RawTextHelpFormatter
+    )
+    parser.add_argument('inpath', help='Input path (single file or dir for search)')
     parser.add_argument('-l', '--logfile', help='Log file', default=None)
-    parser.add_argument('-f', '--force', help='Force update', action='store_true')
+    parser.add_argument('-f', '--force', help='Force update (recreate all)', action='store_true')
     parser.add_argument('-d', '--dryrun', help='Dry run', action='store_true')
     return parser.parse_args()
 
 
 def main():
-    args = args_parse()
+    args = __args_parse()
 
     log.init_logger(args.logfile, level=logging.DEBUG)
 

@@ -60,5 +60,12 @@ dependencies = [
 "Changelog" = "https://github.com/sashacmc/mmdiary/blob/master/CHANGELOG.md"
 
 [project.scripts]
-mmdiary = "mmdiary:main"
+mmdiary-notion-upload = "mmdiary.notion.uploader:main"
+mmdiary-notion-cleanup = "mmdiary.notion.cleanup:main"
+mmdiary-notion-cachedb = "mmdiary.notion.cachedb:main"
 mmdiary-telegrambot = "mmdiary.telegrambot.telegrambot_service:main"
+mmdiary-transcriber-run = "mmdiary.transcriber.transcriber:main"
+mmdiary-transcriber-verify = "mmdiary.transcriber.verifier:main"
+mmdiary-transcriber-search = "mmdiary.transcriber.searcher:main"
+mmdiary-video-concat = "mmdiary.video.processor:main"
+mmdiary-video-upload = "mmdiary.video.uploader:main"
