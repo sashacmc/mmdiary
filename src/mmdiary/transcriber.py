@@ -94,7 +94,7 @@ def __args_parse():
 
 def main():
     args = __args_parse()
-    log.initLogger(args.logfile, logging.DEBUG)
+    log.init_logger(args.logfile, logging.DEBUG)
 
     fileslist = []
     if os.path.isfile(args.inpath):

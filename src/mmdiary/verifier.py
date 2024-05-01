@@ -314,7 +314,7 @@ def args_parse():
 
 def main():
     args = args_parse()
-    log.initLogger(args.logfile, logging.DEBUG)
+    log.init_logger(args.logfile, logging.DEBUG)
     logging.getLogger("urllib3").setLevel(logging.ERROR)
 
     vf = Verifier(args.dryrun, args.force, args.sync)

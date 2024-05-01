@@ -244,7 +244,7 @@ def args_parse():
 def main():
     args = args_parse()
 
-    log.initLogger(args.logfile, level=logging.DEBUG)
+    log.init_logger(args.logfile, level=logging.DEBUG)
 
     token = os.getenv("NOTION_TOKEN")
     api_key = os.getenv("NOTION_API_KEY")

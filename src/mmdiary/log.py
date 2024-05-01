@@ -1,21 +1,25 @@
-import logging
+"""
+Log utilites
+"""
+
 import os
 import sys
-import time
+import logging
 
 LOGFMT = '[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s'
 DATEFMT = '%Y-%m-%d %H:%M:%S'
 
 
-def calcLogName():
-    defpath = '/var/log/photo-importer'
+def init_logger(filename=None, level=logging.INFO):
+    """
+    Initialize the logger.
 
-    fname = time.strftime('%Y-%m-%d_%H-%M-%S_', time.localtime()) + '.log'
+    Args:
+        filename (str, optional): Path to the log file. If None, logs will be printed to console.
+                                  Defaults to None.
+        level (int, optional): Logging level. Defaults to logging.INFO.
+    """
 
-    return os.path.join(defpath, fname)
-
-
-def initLogger(filename=None, level=logging.INFO):
     if filename is not None:
         try:
             os.makedirs(os.path.split(filename)[0])
@@ -32,5 +36,5 @@ def initLogger(filename=None, level=logging.INFO):
 
     logging.getLogger().setLevel(level)
 
-    logging.info('Log file: ' + str(filename))
+    logging.info('Log file: %s', str(filename))
     logging.debug(str(sys.argv))

@@ -211,7 +211,7 @@ def __args_parse():
 
 def main():
     args = __args_parse()
-    log.initLogger(level=logging.DEBUG)
+    log.init_logger(level=logging.DEBUG)
     lib = DateLib()
 
     if args.action == 'scan':

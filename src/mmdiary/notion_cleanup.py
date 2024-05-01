@@ -53,7 +53,7 @@ def delete_block(client, block_ids):
 
 
 def main():
-    log.initLogger()
+    log.init_logger()
     try:
         token = os.getenv("NOTION_TOKEN")
         if not token:

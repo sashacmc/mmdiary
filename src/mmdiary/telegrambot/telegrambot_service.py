@@ -223,7 +223,7 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 def main() -> None:
-    log.initLogger(None, level=logging.DEBUG)
+    log.init_logger(None, level=logging.DEBUG)
 
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
