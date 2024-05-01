@@ -210,11 +210,12 @@ class VideoUploader:
         for date, _ in converted:
             try:
                 if not self.process_date(date):
-                    return
+                    return pbar.value
             except Exception:
                 logging.exception("Video uploading failed")
+
             pbar.increment()
-        pbar.finish()
+        return pbar.value
 
 
 def __args_parse():
@@ -231,13 +232,15 @@ def main():
 
     vup = VideoUploader()
 
+    res_count = 0
     if len(args.dates) == 0:
-        vup.process_all()
+        res_count = vup.process_all()
     else:
         for date in args.dates:
             vup.process_date(date)
+            res_count += 1
 
-    logging.info("Uploader done.")
+    logging.info("Uploader done: %s", res_count)
 
 
 if __name__ == "__main__":
