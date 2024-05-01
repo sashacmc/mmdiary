@@ -7,11 +7,11 @@ import os
 import random
 from datetime import datetime
 
-import datelib
-import log
 import mixvideoconcat
 import progressbar
-from medialib import TIME_OUT_FORMAT
+
+from mmdiary.utils import log, datelib
+from mmdiary.utils.medialib import TIME_OUT_FORMAT
 
 
 class VideoProcessor:
@@ -23,6 +23,8 @@ class VideoProcessor:
         os.makedirs(self.__res_dir, exist_ok=True)
 
         self.__lib = datelib.DateLib()
+
+        logging.debug("Update existing (not used): %s", self.__update_existing)
 
     def __save_json(self, videos_info, processduration, filename):
         data = {
@@ -43,9 +45,7 @@ class VideoProcessor:
 
         resfilename = os.path.join(self.__res_dir, f"{date}.mp4")
         resfilename_json = os.path.join(self.__res_dir, f"{date}.json")
-        fileinfos = mixvideoconcat.concat(
-            fnames, resfilename, self.__work_dir, dry_run=False
-        )
+        fileinfos = mixvideoconcat.concat(fnames, resfilename, self.__work_dir, dry_run=False)
 
         videos_info = []
         for af, info in zip(afiles, fileinfos):
@@ -104,9 +104,7 @@ def __args_parse():
     parser = argparse.ArgumentParser()
     parser.add_argument("dates", nargs="*", help="Date to process")
     parser.add_argument('-l', '--logfile', help='Log file', default=None)
-    parser.add_argument(
-        '-u', '--update', help='Update existing', action='store_true'
-    )
+    parser.add_argument('-u', '--update', help='Update existing', action='store_true')
     return parser.parse_args()
 
 

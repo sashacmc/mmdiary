@@ -5,13 +5,15 @@ import logging
 import os
 from datetime import datetime
 
-import log
-import medialib
 import progressbar
 import whisper
-from medialib import TIME_OUT_FORMAT
 from photo_importer import fileprop
-from verifier import check_text
+
+from mmdiary.utils import log
+from mmdiary.utils import medialib
+from mmdiary.utils.medialib import TIME_OUT_FORMAT
+
+from mmdiary.transcriber.verifier import check_text
 
 
 class Transcriber:
@@ -36,9 +38,7 @@ class Transcriber:
 
     def to_text(self, res):
         if "segments" in res:
-            return "\n".join(
-                [s.get("text", "").strip() for s in res["segments"]]
-            )
+            return "\n".join([s.get("text", "").strip() for s in res["segments"]])
         return ""
 
     def duration(self, res):
@@ -71,9 +71,7 @@ class Transcriber:
             "type": tp,
             "source": os.path.split(file.name())[1],
             "duration": self.duration(res),
-            "recordtime": prop.time().strftime(TIME_OUT_FORMAT)
-            if prop.time() is not None
-            else "",
+            "recordtime": prop.time().strftime(TIME_OUT_FORMAT) if prop.time() is not None else "",
             "processtime": datetime.now().strftime(TIME_OUT_FORMAT),
         }
 
@@ -86,9 +84,7 @@ def __args_parse():
     parser = argparse.ArgumentParser()
     parser.add_argument('inpath', help='Input path')
     parser.add_argument('-l', '--logfile', help='Log file', default=None)
-    parser.add_argument(
-        '-u', '--update', help='Update existing', action='store_true'
-    )
+    parser.add_argument('-u', '--update', help='Update existing', action='store_true')
     return parser.parse_args()
 
 

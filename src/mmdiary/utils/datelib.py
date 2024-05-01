@@ -5,9 +5,8 @@ import logging
 import os
 import sqlite3
 
-import log
-import medialib
-from medialib import get_date_from_timestring
+from mmdiary.utils import log, medialib
+from mmdiary.utils.medialib import get_date_from_timestring
 
 PROCESSED_NONE = 0
 PROCESSED_IN_PROCESS = 1

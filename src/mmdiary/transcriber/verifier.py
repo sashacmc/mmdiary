@@ -6,10 +6,11 @@ import logging
 import os
 from datetime import datetime
 
-import cachedb
-import log
-from medialib import JSON_EXT, TIME_OUT_FORMAT
 from notion.client import NotionClient
+
+from mmdiary.utils import log
+from mmdiary.notion import cachedb
+from mmdiary.utils.medialib import JSON_EXT, TIME_OUT_FORMAT
 
 CACHE_DB_FILE = "~/.notion_upload.sqlite3"
 

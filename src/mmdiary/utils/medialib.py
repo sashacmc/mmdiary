@@ -64,7 +64,7 @@ class MediaFile:
 class MediaLib:
     def __init__(self, root=None):
         if root is None:
-            root = os.getenv("AUDIO_NOTES_ROOT")
+            root = os.getenv("AUDIO_NOTES_ROOT")  # TODO: made proper init
         self.__root = root
 
         self.__supported_exts = []

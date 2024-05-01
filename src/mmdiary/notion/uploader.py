@@ -4,15 +4,16 @@
 import argparse
 import logging
 import os
-
-import cachedb
-import log
-import medialib
 import progressbar
+
 from notion.block import AudioBlock, CalloutBlock, TextBlock
 from notion.client import NotionClient
 from notion.collection import CollectionRowBlock
 from notion_client import Client
+
+from mmdiary.utils import log, medialib
+from mmdiary.notion import cachedb
+
 
 MAX_TEXT_SIZE = 2000
 

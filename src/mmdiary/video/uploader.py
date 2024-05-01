@@ -6,11 +6,11 @@ import logging
 import os
 from datetime import datetime
 
-import datelib
 import googleapiclient.discovery
-import log
 import progressbar
-from medialib import TIME_OUT_FORMAT, split_large_text
+
+from mmdiary.utils import log, datelib
+from mmdiary.utils.medialib import TIME_OUT_FORMAT, split_large_text
 
 YOUTUBE_MAX_DESCRIPTION = 5000
 YOUTUBE_MAX_COMMENT = 5000

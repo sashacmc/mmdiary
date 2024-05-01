@@ -3,9 +3,10 @@
 import logging
 import os
 
-import log
 from notion.client import NotionClient
 from notion.collection import CollectionRowBlock
+
+from mmdiary.utils import log
 
 
 def get_trash(client):

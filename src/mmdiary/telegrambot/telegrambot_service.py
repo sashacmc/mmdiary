@@ -6,8 +6,6 @@ import random
 from collections import defaultdict
 from datetime import datetime
 
-import log
-import medialib
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     Application,
@@ -18,6 +16,8 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+
+from mmdiary.utils import log, medialib
 
 g_audiofiles = medialib.MediaLib().get_processed()
 MAX_MESSAGE_SIZE = 1024
