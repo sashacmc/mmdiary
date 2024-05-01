@@ -44,12 +44,13 @@ classifiers = [
 dependencies = [
 	"notion_client",
 	"notion",
-	"progressbar",
-	"telegram",
-	"whisper",
+	"progressbar2",
+	"python-telegram-bot",
+	"openai-whisper",
 	"photo_importer",
 	"mixvideoconcat",
-	"google",
+	"google-auth-oauthlib",
+	"google-api-core",
 ]
 
 [project.urls]
