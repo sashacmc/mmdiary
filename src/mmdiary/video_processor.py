@@ -1,19 +1,16 @@
 #!/usr/bin/python3
 
-import os
-import random
-import logging
 import argparse
 import json
-
+import logging
+import os
+import random
 from datetime import datetime
 
-import progressbar
-import mixvideoconcat
-
-import log
 import datelib
-
+import log
+import mixvideoconcat
+import progressbar
 from audiolib import TIME_OUT_FORMAT
 
 

@@ -1,30 +1,18 @@
 #!/usr/bin/python3
 
-import log
-import audiolib
-
-import os
 import logging
+import os
 import random
-
-from telegram import (
-    ForceReply,
-    Update,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-)
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    CallbackQueryHandler,
-    CallbackContext,
-    ContextTypes,
-    JobQueue,
-    MessageHandler,
-    filters,
-)
 from collections import defaultdict
 from datetime import datetime
+
+import audiolib
+import log
+from telegram import (ForceReply, InlineKeyboardButton, InlineKeyboardMarkup,
+                      Update)
+from telegram.ext import (Application, CallbackContext, CallbackQueryHandler,
+                          CommandHandler, ContextTypes, JobQueue,
+                          MessageHandler, filters)
 
 g_audiofiles = audiolib.AudioLib().get_processed()
 MAX_MESSAGE_SIZE = 1024

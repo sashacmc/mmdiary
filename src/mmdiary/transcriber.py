@@ -1,20 +1,17 @@
 #!/usr/bin/python3
 
-import os
 import argparse
 import logging
-
+import os
 from datetime import datetime
-from photo_importer import fileprop
 
-import whisper
-import progressbar
-
-import log
 import audiolib
-
-from verifier import check_text
+import log
+import progressbar
+import whisper
 from audiolib import TIME_OUT_FORMAT
+from photo_importer import fileprop
+from verifier import check_text
 
 
 class Transcriber:

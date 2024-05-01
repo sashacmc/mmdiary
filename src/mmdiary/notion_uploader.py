@@ -1,23 +1,17 @@
 #!/usr/bin/python3
 
-import os
-import logging
-import progressbar
 import argparse
+import logging
+import os
 
 import audiolib
-import log
 import cachedb
-
-from notion_client import Client
-
+import log
+import progressbar
+from notion.block import AudioBlock, CalloutBlock, TextBlock
 from notion.client import NotionClient
-from notion.block import (
-    AudioBlock,
-    TextBlock,
-    CalloutBlock,
-)
 from notion.collection import CollectionRowBlock
+from notion_client import Client
 
 MAX_TEXT_SIZE = 2000
 

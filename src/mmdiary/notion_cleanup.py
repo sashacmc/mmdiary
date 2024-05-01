@@ -1,8 +1,9 @@
 #!/usr/bin/python3
 
-import os
-import log
 import logging
+import os
+
+import log
 from notion.client import NotionClient
 from notion.collection import CollectionRowBlock
 

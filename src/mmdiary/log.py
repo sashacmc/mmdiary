@@ -1,7 +1,7 @@
+import logging
 import os
 import sys
 import time
-import logging
 
 LOGFMT = '[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s'
 DATEFMT = '%Y-%m-%d %H:%M:%S'

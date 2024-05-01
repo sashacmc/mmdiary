@@ -1,18 +1,15 @@
 #!/usr/bin/python3
 
-import os
 import argparse
 import json
 import logging
-
+import os
 from datetime import datetime
-from notion.client import NotionClient
 
-import log
 import cachedb
-
-
-from audiolib import TIME_OUT_FORMAT, JSON_EXT
+import log
+from audiolib import JSON_EXT, TIME_OUT_FORMAT
+from notion.client import NotionClient
 
 CACHE_DB_FILE = "~/.notion_upload.sqlite3"
 

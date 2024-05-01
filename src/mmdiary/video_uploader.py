@@ -1,19 +1,15 @@
 #!/usr/bin/python3
 
-import os
-import logging
 import argparse
 import json
-
+import logging
+import os
 from datetime import datetime
 
-import progressbar
-
-import googleapiclient.discovery
-
-import log
 import datelib
-
+import googleapiclient.discovery
+import log
+import progressbar
 from audiolib import TIME_OUT_FORMAT, split_large_text
 
 YOUTUBE_MAX_DESCRIPTION = 5000

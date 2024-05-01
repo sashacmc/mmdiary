@@ -1,11 +1,11 @@
 #!/usr/bin/python3
 
-import os
 import json
 import logging
+import os
 
-from photo_importer import fileprop
 from photo_importer import config as pi_config
+from photo_importer import fileprop
 
 TIME_OUT_FORMAT = "%Y-%m-%d %H:%M:%S"
 

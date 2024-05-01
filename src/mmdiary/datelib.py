@@ -1,13 +1,12 @@
 #!/usr/bin/python3
 
-import os
-import logging
 import argparse
+import logging
+import os
 import sqlite3
 
-import log
 import audiolib
-
+import log
 from audiolib import get_date_from_timestring
 
 PROCESSED_NONE = 0

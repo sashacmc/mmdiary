@@ -1,9 +1,9 @@
 #!/usr/bin/python3
 
-import os
-import atexit
-import sqlite3
 import argparse
+import atexit
+import os
+import sqlite3
 import threading
 
 from notion_client import Client

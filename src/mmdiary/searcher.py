@@ -1,8 +1,8 @@
 #!/usr/bin/python3
 
-import os
 import argparse
 import json
+import os
 
 JSON_EXT = ".json"
 
