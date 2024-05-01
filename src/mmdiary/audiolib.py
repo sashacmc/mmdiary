@@ -14,7 +14,7 @@ JSON_EXT = ".json"
 g_fileprop = fileprop.FileProp(pi_config.Config())
 
 
-class AudioFile(object):
+class AudioFile:
     def __init__(self, filename):
         self.__filename = filename
         self.__prop = None
@@ -33,11 +33,11 @@ class AudioFile(object):
         if not self.has_json():
             return None
 
-        with open(self.json_name(), "r") as f:
+        with open(self.json_name(), "r", encoding="utf-8") as f:
             return json.load(f)
 
     def save_json(self, cont):
-        with open(self.json_name(), "w") as f:
+        with open(self.json_name(), "w", encoding="utf-8") as f:
             json.dump(cont, f, ensure_ascii=False, indent=2)
         self.__json = cont
 
@@ -52,7 +52,7 @@ class AudioFile(object):
         return self.__prop
 
     def __lt__(self, other):
-        return self.__filename < other.__filename
+        return self.name() < other.name()
 
     def __repr__(self):
         return self.__filename
@@ -61,7 +61,7 @@ class AudioFile(object):
         return self.__filename
 
 
-class AudioLib(object):
+class AudioLib:
     def __init__(self, root=None):
         if root is None:
             root = os.getenv("AUDIO_NOTES_ROOT")
@@ -73,17 +73,17 @@ class AudioLib(object):
                 self.__supported_exts.append(ext)
 
     def __on_walk_error(self, err):
-        logging.error('scan files error: %s' % err)
+        logging.error('scan files error: %s', err)
 
     def __scan_files(self, inpath):
         res = []
-        for root, dirs, files in os.walk(inpath, onerror=self.__on_walk_error):
+        for root, _, files in os.walk(inpath, onerror=self.__on_walk_error):
             dup = set()
             for fname in files:
                 base, ext = os.path.splitext(fname)
                 if ext.lower() in self.__supported_exts:
                     if base in dup:
-                        logging.error('duplicate %s in %s' % (base, root))
+                        logging.error('duplicate %s in %s', base, root)
                     res.append(os.path.join(root, fname))
                     dup.add(base)
 

@@ -20,11 +20,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS existing_pages_filename ON existing_pages (fil
 '''
 
 
-class CacheDB(object):
+class CacheDB:
     def __init__(self, filename):
-        self.__conn = sqlite3.connect(
-            os.path.expanduser(filename), check_same_thread=False
-        )
+        self.__conn = sqlite3.connect(os.path.expanduser(filename), check_same_thread=False)
 
         self.__conn.executescript(SCHEMA)
         self.__lock = threading.RLock()
@@ -78,17 +76,14 @@ class CacheDB(object):
     def remove_from_existing_pages(self, filename):
         with self.__lock:
             c = self.__conn.cursor()
-            c.execute(
-                'DELETE FROM existing_pages WHERE filename=?', (filename,)
-            )
+            c.execute('DELETE FROM existing_pages WHERE filename=?', (filename,))
 
     def __get_prop(self, row, name, default=""):
         try:
             rt = row["properties"][name]["rich_text"]
             if len(rt) != 0:
                 return rt[0]["plain_text"]
-            else:
-                return ""
+            return ""
         except IndexError:
             print(f"Property '{name}' not found in {row}")
             return default
@@ -113,7 +108,7 @@ class CacheDB(object):
             self.add_existing_page(source, processtime, rid)
 
         if duplicates != "":
-            raise Exception(f"Duplicate items in collection: {duplicates}")
+            raise UserWarning(f"Duplicate items in collection: {duplicates}")
 
 
 def args_parse():
@@ -152,9 +147,7 @@ def main():
     elif args.action == 'remove':
         db.remove_from_existing_pages(args.file)
     elif args.action == 'sync':
-        db.sync_existing_pages(
-            Client(auth=os.getenv("NOTION_API_KEY")), os.getenv("NOTION_DB_ID")
-        )
+        db.sync_existing_pages(Client(auth=os.getenv("NOTION_API_KEY")), os.getenv("NOTION_DB_ID"))
 
 
 if __name__ == '__main__':

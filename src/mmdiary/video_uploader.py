@@ -39,9 +39,7 @@ def get_youtube_credentials(client_secrets, token_file):
         scopes=scopes,
         redirect_uri="urn:ietf:wg:oauth:2.0:oob",
     )
-    authorization_url, _ = flow.authorization_url(
-        access_type="offline", prompt="consent"
-    )
+    authorization_url, _ = flow.authorization_url(access_type="offline", prompt="consent")
 
     print(f"Please go to this URL and authorize access: {authorization_url}")
     authorization_code = input("Enter the authorization code: ")
@@ -106,41 +104,29 @@ class VideoUploader:
         os.makedirs(self.__res_dir, exist_ok=True)
 
         self.__lib = datelib.DateLib()
-        self.__credentials = get_youtube_credentials(
-            "client_secrets.json", "token.json"
-        )
+        self.__credentials = get_youtube_credentials("client_secrets.json", "token.json")
 
     def __load_json(self, filename):
         with open(filename, "r", encoding="utf-8") as f:
             return json.load(f)
 
-    def __gen_time_labels(
-        self, data, text_field, delimiter=" ", skip_empty=False
-    ):
+    def __gen_time_labels(self, data, text_field, delimiter=" ", skip_empty=False):
         time_labels = []
         for info in data["videos"]:
-            time = datetime.strptime(
-                info["timestamp"], TIME_OUT_FORMAT
-            ).strftime("%H: %M: %S")
+            time = datetime.strptime(info["timestamp"], TIME_OUT_FORMAT).strftime("%H: %M: %S")
             caption = info[text_field]
             if len(caption) == 0 and skip_empty:
                 continue
-            time_labels.append(
-                (info["duration"], f"[{time}]{delimiter}{caption}")
-            )
+            time_labels.append((info["duration"], f"[{time}]{delimiter}{caption}"))
         return time_labels
 
     def __gen_comments(self, data):
-        time_labels = self.__gen_time_labels(
-            data, "text", delimiter="\n", skip_empty=True
-        )
+        time_labels = self.__gen_time_labels(data, "text", delimiter="\n", skip_empty=True)
         comment_text = generate_description_full(time_labels)
         return split_large_text(comment_text, YOUTUBE_MAX_COMMENT)
 
     def upload_video(self, fname, title, time_labels):
-        youtube = googleapiclient.discovery.build(
-            "youtube", "v3", credentials=self.__credentials
-        )
+        youtube = googleapiclient.discovery.build("youtube", "v3", credentials=self.__credentials)
 
         # Upload video
         request_body = {
@@ -153,36 +139,24 @@ class VideoUploader:
         }
 
         try:
-            media_file = googleapiclient.http.MediaFileUpload(
-                fname, chunksize=-1, resumable=True
-            )
-            request = youtube.videos().insert(
-                part="snippet,status", body=request_body, media_body=media_file
-            )
+            media_file = googleapiclient.http.MediaFileUpload(fname, chunksize=-1, resumable=True)
+            request = youtube.videos().insert(part="snippet,status", body=request_body, media_body=media_file)
             logging.debug("Upload started: %s", request_body)
             response = request.execute()
             video_id = response["id"]
             return video_id
         except googleapiclient.errors.ResumableUploadError as ex:
-            if (
-                ex.status_code == 403
-                and ex.error_details[0]["reason"] == "quotaExceeded"
-            ):
+            if ex.status_code == 403 and ex.error_details[0]["reason"] == "quotaExceeded":
                 logging.error("quotaExceeded")
                 return None
-            if (
-                ex.status_code == 400
-                and ex.error_details[0]["reason"] == "uploadLimitExceeded"
-            ):
+            if ex.status_code == 400 and ex.error_details[0]["reason"] == "uploadLimitExceeded":
                 logging.error("uploadLimitExceeded")
                 return None
 
             raise
 
     def add_comment(self, video_id, comment_text):
-        youtube = googleapiclient.discovery.build(
-            "youtube", "v3", credentials=self.__credentials
-        )
+        youtube = googleapiclient.discovery.build("youtube", "v3", credentials=self.__credentials)
 
         # Add a comment to the video
         request = youtube.commentThreads().insert(
@@ -190,9 +164,7 @@ class VideoUploader:
             body={
                 "snippet": {
                     "videoId": video_id,
-                    "topLevelComment": {
-                        "snippet": {"textOriginal": comment_text}
-                    },
+                    "topLevelComment": {"snippet": {"textOriginal": comment_text}},
                 }
             },
         )
@@ -255,7 +227,7 @@ class VideoUploader:
                 if not self.process_date(date):
                     return
             except Exception:
-                logging.exception("Video processing failed")
+                logging.exception("Video uploading failed")
             pbar.increment()
 
         pbar.finish()
@@ -273,13 +245,13 @@ def main():
     log.initLogger(args.logfile, logging.DEBUG)
     logging.getLogger("py.warnings").setLevel(logging.ERROR)
 
-    vp = VideoUploader()
+    vup = VideoUploader()
 
     if len(args.dates) == 0:
-        vp.process_all()
+        vup.process_all()
     else:
         for date in args.dates:
-            vp.process_date(date)
+            vup.process_date(date)
 
     logging.info("Done.")
 
