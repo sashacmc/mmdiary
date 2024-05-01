@@ -3,7 +3,7 @@ import progressbar
 
 def start(text, maxval):
     return progressbar.ProgressBar(
-        maxval=maxmal,
+        maxval=maxval,
         widgets=[
             f"{text}: ",
             progressbar.SimpleProgress(),
