@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1 - 2024-05-01
+
+- Update README.md
+
 ## 0.1.0 - 2024-05-01
 
 Initial release with base funtionality:
