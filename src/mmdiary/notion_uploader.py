@@ -1,3 +1,4 @@
+# pylint: disable=too-many-arguments
 #!/usr/bin/python3
 
 import argparse
@@ -16,7 +17,7 @@ from notion_client import Client
 MAX_TEXT_SIZE = 2000
 
 
-class NotionUploader(object):
+class NotionUploader:
     def __init__(
         self,
         token,
@@ -51,14 +52,12 @@ class NotionUploader(object):
         cnt = len(self.__cache.list_existing_pages())
         if cnt == 0 and not self.__dry_run:
             logging.info("Cache empty, init...")
-            self.__cache.sync_existing_pages(
-                self.__notion_api, self.__database_id
-            )
+            self.__cache.sync_existing_pages(self.__notion_api, self.__database_id)
             cnt = len(self.__cache.list_existing_pages())
 
         self.__status["existing_init"] = cnt
         self.__status["existing"] = cnt
-        logging.info(f"Found existing {cnt} items")
+        logging.info("Found existing %i items", cnt)
 
     def add_existing_page(self, source, processtime, bid):
         if not self.__dry_run:
@@ -66,10 +65,10 @@ class NotionUploader(object):
         self.__status["existing"] += 1
 
     def delete_page(self, source, bid):
-        logging.debug(f"remove block {bid}")
+        logging.debug("remove block %s", bid)
         if not self.__dry_run:
             block = self.__notion.get_block(bid)
-            if type(block) is CollectionRowBlock:
+            if isinstance(block, CollectionRowBlock):
                 block.remove()
             else:
                 block.remove(permanently=True)
@@ -83,22 +82,20 @@ class NotionUploader(object):
         source = data["source"]
         processtime = data["processtime"]
         page = self.__cache.check_existing_pages(source)
-        logging.debug(f"check_existing: {source}: {page}")
+        logging.debug("check_existing: %s: %s", source, page)
         if page is None:
             return False
 
         # page processtime == "" mean that page was modied on notion side
         if processtime > page[0] and page[0] != "":
             if delete:
-                logging.info(
-                    f"processtime changed: {processtime} > {page[0]} for {source}"
-                )
+                logging.info("processtime changed: %s > %s for %s", processtime, page[0], source)
                 self.delete_page(source, page[1])
             return False
 
         if self.__force_update:
             if delete:
-                logging.info(f"force update for {source}")
+                logging.info("force update for %s", source)
                 self.delete_page(source, page[1])
             return False
 
@@ -165,18 +162,16 @@ class NotionUploader(object):
 
             audio = res.children.add_new(AudioBlock)
             info = audio.upload_file(fname)
-            logging.debug(f"Audio uploaded: {info}")
+            logging.debug("Audio uploaded: %s", info)
 
-            for block in audiolib.split_large_text(
-                data["text"], MAX_TEXT_SIZE
-            ):
+            for block in audiolib.split_large_text(data["text"], MAX_TEXT_SIZE):
                 res.children.add_new(TextBlock, title=block)
 
             res.set("format.block_locked", True)
 
             self.add_existing_page(data["source"], data["processtime"], res.id)
         except Exception:
-            logging.warning(f"Delete uncompleate page for: {fname}")
+            logging.warning("Delete uncompleate page for: %s", fname)
             self.delete_page(None, bid)
             raise
 
@@ -185,10 +180,10 @@ class NotionUploader(object):
     def check_json(self, data):
         for f in ("recordtime", "processtime", "source"):
             if len(data[f].strip()) == 0:
-                raise Exception(f"Incorrect file: empty {f}")
+                raise UserWarning(f"Incorrect file: empty {f}")
 
     def process(self, file):
-        logging.info(f"Process file: {file}")
+        logging.info("Process file: %s", file)
         self.__status["processed"] += 1
 
         data = file.load_json()
@@ -197,9 +192,9 @@ class NotionUploader(object):
         if self.check_existing(data, True):
             return
 
-        res = self.create_page(data, file.name())
+        self.create_page(data, file.name())
 
-        logging.info(f"Saved: {res}")
+        logging.info("Saved")
 
     def process_list(self, fileslist):
         fileslist = list(filter(self.filter_existing, fileslist))
@@ -234,9 +229,7 @@ def args_parse():
     parser = argparse.ArgumentParser()
     parser.add_argument('inpath', help='Input path')
     parser.add_argument('-l', '--logfile', help='Log file', default=None)
-    parser.add_argument(
-        '-f', '--force', help='Force update', action='store_true'
-    )
+    parser.add_argument('-f', '--force', help='Force update', action='store_true')
     parser.add_argument('-d', '--dryrun', help='Dry run', action='store_true')
     return parser.parse_args()
 
@@ -272,7 +265,7 @@ def main():
     )
     nup.process_list(fileslist)
 
-    logging.info(f"Done: {nup.status()}")
+    logging.info("Done: %s", nup.status())
 
 
 if __name__ == '__main__':

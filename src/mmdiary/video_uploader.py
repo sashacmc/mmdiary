@@ -136,7 +136,9 @@ class VideoUploader:
 
         try:
             media_file = googleapiclient.http.MediaFileUpload(fname, chunksize=-1, resumable=True)
-            request = youtube.videos().insert(part="snippet,status", body=request_body, media_body=media_file)
+            request = youtube.videos().insert(
+                part="snippet,status", body=request_body, media_body=media_file
+            )
             logging.debug("Upload started: %s", request_body)
             response = request.execute()
             video_id = response["id"]

@@ -35,21 +35,21 @@ def get_trash(client):
 
 
 def delete_block(client, block_ids):
-    logging.info(f"Found {len(block_ids)} trash blocks.")
+    logging.info("Found %i trash blocks.", len(block_ids))
     cnt = 0
     for bid in block_ids:
         try:
             block = client.get_block(bid)
-            if type(block) is CollectionRowBlock:
+            if isinstance(block, CollectionRowBlock):
                 block.remove()
             else:
                 block.remove(permanently=True)
 
-            logging.info(f"Done: {bid}")
+            logging.info("Done: %s", bid)
             cnt += 1
         except Exception as err:
-            logging.error(f"Error deleting block batch: {err}, Batch: {bid}")
-    logging.info(f"Successfully cleared {cnt} trash blocks.")
+            logging.error("Error deleting block batch: %s, Batch: %s", err, bid)
+    logging.info("Successfully cleared %i trash blocks.", cnt)
 
 
 def main():
@@ -69,8 +69,9 @@ def main():
             logging.info("No trash blocks found.")
 
     except Exception as e:
-        logging.error(f"An unexpected error occurred: {e}")
+        logging.error("An unexpected error occurred: %s", e)
         return 1
+    return 0
 
 
 if __name__ == "__main__":

@@ -8,17 +8,22 @@ from datetime import datetime
 
 import audiolib
 import log
-from telegram import (ForceReply, InlineKeyboardButton, InlineKeyboardMarkup,
-                      Update)
-from telegram.ext import (Application, CallbackContext, CallbackQueryHandler,
-                          CommandHandler, ContextTypes, JobQueue,
-                          MessageHandler, filters)
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+    JobQueue,
+    MessageHandler,
+    filters,
+)
 
 g_audiofiles = audiolib.AudioLib().get_processed()
 MAX_MESSAGE_SIZE = 1024
 
 
-class DateSelector(object):
+class DateSelector:
     EXIT = 0
     YEAR = 1
     MONTH = 2
@@ -34,9 +39,7 @@ class DateSelector(object):
         self.__load()
 
     def __load(self):
-        self.__files = defaultdict(
-            lambda: defaultdict(lambda: defaultdict(lambda: []))
-        )
+        self.__files = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: [])))
         for af in g_audiofiles:
             data = af.load_json()
             rtime = data["recordtime"]  # "YYYY-MM-DD hh-mm-ss"
@@ -60,24 +63,22 @@ class DateSelector(object):
     def get_items(self):
         if self.__type == self.YEAR:
             return self.__get_years()
-        elif self.__type == self.MONTH:
+        if self.__type == self.MONTH:
             return self.__get_months(self.__year)
-        elif self.__type == self.DAY:
+        if self.__type == self.DAY:
             return self.__get_days(self.__year, self.__month)
-        else:
-            return []
+        return []
 
     def get_caption(self):
         if self.__type == self.YEAR:
             return "year"
-        elif self.__type == self.MONTH:
+        if self.__type == self.MONTH:
             return "month"
-        elif self.__type == self.DAY:
+        if self.__type == self.DAY:
             return "day"
-        elif self.__type == self.END:
+        if self.__type == self.END:
             return "back"
-        else:
-            return ""
+        return ""
 
     def select_item(self, val):
         if self.__type == self.YEAR:
@@ -105,8 +106,7 @@ class DateSelector(object):
     def result(self):
         if self.__type == self.END:
             return self.__get_notes(self.__year, self.__month, self.__day)
-        else:
-            return None
+        return None
 
 
 def audiofile_to_message(audiofile):
@@ -121,21 +121,16 @@ def audiofile_to_message(audiofile):
 
 
 async def check_auth(update, context):
-    if (
-        update.effective_user.username.lower()
-        not in context.application.auth_users
-    ):
+    if update.effective_user.username.lower() not in context.application.auth_users:
         await update.message.reply_html("You not registered, contact admin")
         return False
     return True
 
 
-async def command_start(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-) -> None:
+async def command_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     username = update.message.chat.username
     chat_id = update.message.chat.id
-    logging.info(f"New user: {username} ({chat_id})")
+    logging.info("New user: %s (%s)", username, chat_id)
     await update.message.reply_html(f"Hi {username}!")
     await check_auth(update, context)
 
@@ -143,15 +138,13 @@ async def command_start(
 async def job_random(context: ContextTypes.DEFAULT_TYPE) -> None:
     audio, texts = audiofile_to_message(random.choice(g_audiofiles))
     for chat_id in context.application.auto_send_chats:
-        logging.info(f"Audio {audio['audio']} sent to {chat_id}")
+        logging.info("Audio %s sent to %s", audio['audio'], chat_id)
         await context.bot.send_audio(chat_id, **audio)
         for text in texts:
             await context.bot.send_message(chat_id, text)
 
 
-async def command_random(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-) -> None:
+async def command_random(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not await check_auth(update, context):
         return
     audio, texts = audiofile_to_message(random.choice(g_audiofiles))
@@ -160,9 +153,7 @@ async def command_random(
         await update.message.reply_text(text)
 
 
-async def command_get(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-) -> None:
+async def command_get(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not await check_auth(update, context):
         return
     query = update.callback_query
@@ -177,22 +168,18 @@ async def command_get(
         selector.select_item(query.data)
         resp = query.message
 
-    button_list = [
-        InlineKeyboardButton(it, callback_data=it)
-        for it in selector.get_items()
-    ]
+    button_list = [InlineKeyboardButton(it, callback_data=it) for it in selector.get_items()]
     if len(button_list) == 0:
         res = selector.result()
         if res is None:
             await resp.reply_text("Bye")
             selector = None
             return
-        else:
-            for af in res:
-                audio, texts = audiofile_to_message(af)
-                await resp.reply_audio(**audio)
-                for text in texts:
-                    await resp.reply_text(text)
+        for af in res:
+            audio, texts = audiofile_to_message(af)
+            await resp.reply_audio(**audio)
+            for text in texts:
+                await resp.reply_text(text)
 
     reply_markup = InlineKeyboardMarkup(
         build_menu(
@@ -218,7 +205,7 @@ def build_menu(buttons, n_cols, header_buttons=None, footer_buttons=None):
     return menu
 
 
-async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def echo(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(update.message.text)
 
 
@@ -234,15 +221,11 @@ def main() -> None:
     job_queue = JobQueue()
     job_queue.run_daily(
         job_random,
-        datetime.strptime(
-            os.getenv("AUDIO_NOTES_TELEGRAM_AUTO_SEND_TIME"), '%H:%M:%S'
-        ).time(),
+        datetime.strptime(os.getenv("AUDIO_NOTES_TELEGRAM_AUTO_SEND_TIME"), '%H:%M:%S').time(),
     )
     # job_queue.run_repeating(job_random, 60)
 
-    application = (
-        Application.builder().token(token).job_queue(job_queue).build()
-    )
+    application = Application.builder().token(token).job_queue(job_queue).build()
 
     application.auth_users = list(
         map(
@@ -265,9 +248,7 @@ def main() -> None:
     application.add_handler(CallbackQueryHandler(command_get))
 
     # on non command i.e message - echo the message on Telegram
-    application.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, echo)
-    )
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
 
     application.run_polling(poll_interval=1, allowed_updates=Update.ALL_TYPES)
 
