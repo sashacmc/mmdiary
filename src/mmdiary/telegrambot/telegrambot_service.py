@@ -19,8 +19,9 @@ from telegram.ext import (
 
 from mmdiary.utils import log, medialib
 
-g_audiofiles = medialib.MediaLib().get_processed()
 MAX_MESSAGE_SIZE = 1024
+
+g_audiofiles = medialib.MediaLib(os.getenv("AUDIO_NOTES_ROOT")).get_processed()
 
 
 class DateSelector:

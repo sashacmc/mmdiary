@@ -62,9 +62,7 @@ class MediaFile:
 
 
 class MediaLib:
-    def __init__(self, root=None):
-        if root is None:
-            root = os.getenv("AUDIO_NOTES_ROOT")  # TODO: made proper init
+    def __init__(self, root):
         self.__root = root
 
         self.__supported_exts = []
@@ -126,7 +124,7 @@ def get_date_from_timestring(time):
 
 
 def main():
-    lib = MediaLib()
+    lib = MediaLib(os.getenv("AUDIO_NOTES_ROOT"))
     for f in lib.get_new():
         print(f)
 

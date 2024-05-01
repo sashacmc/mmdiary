@@ -1,17 +1,16 @@
-# pylint: disable=too-many-arguments
 #!/usr/bin/python3
+# pylint: disable=too-many-arguments
 
 import argparse
 import logging
 import os
-import progressbar
 
 from notion.block import AudioBlock, CalloutBlock, TextBlock
 from notion.client import NotionClient
 from notion.collection import CollectionRowBlock
 from notion_client import Client
 
-from mmdiary.utils import log, medialib
+from mmdiary.utils import log, medialib, progressbar
 from mmdiary.notion import cachedb
 
 
@@ -201,19 +200,7 @@ class NotionUploader:
         fileslist = list(filter(self.filter_existing, fileslist))
 
         self.__status["total"] = len(fileslist)
-        pbar = progressbar.ProgressBar(
-            maxval=len(fileslist),
-            widgets=[
-                "Uploading: ",
-                progressbar.SimpleProgress(),
-                " (",
-                progressbar.Percentage(),
-                ") ",
-                progressbar.Bar(),
-                " ",
-                progressbar.ETA(),
-            ],
-        ).start()
+        pbar = progressbar.start("Uploading", len(fileslist))
 
         for af in fileslist:
             try:

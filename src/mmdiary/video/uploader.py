@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+# pylint: disable=import-outside-toplevel,no-member # because of false positive on Resource
 
 import argparse
 import json
@@ -7,9 +8,8 @@ import os
 from datetime import datetime
 
 import googleapiclient.discovery
-import progressbar
 
-from mmdiary.utils import log, datelib
+from mmdiary.utils import log, datelib, progressbar
 from mmdiary.utils.medialib import TIME_OUT_FORMAT, split_large_text
 
 YOUTUBE_MAX_DESCRIPTION = 5000
@@ -206,20 +206,7 @@ class VideoUploader:
     def process_all(self):
         converted = list(self.__lib.get_converted())
 
-        pbar = progressbar.ProgressBar(
-            maxval=len(converted),
-            widgets=[
-                "Upload: ",
-                progressbar.SimpleProgress(),
-                " (",
-                progressbar.Percentage(),
-                ") ",
-                progressbar.Bar(),
-                ' ',
-                progressbar.ETA(),
-            ],
-        ).start()
-
+        pbar = progressbar.start("Upload", len(converted))
         for date, _ in converted:
             try:
                 if not self.process_date(date):
@@ -227,7 +214,6 @@ class VideoUploader:
             except Exception:
                 logging.exception("Video uploading failed")
             pbar.increment()
-
         pbar.finish()
 
 
@@ -251,11 +237,11 @@ def main():
         for date in args.dates:
             vup.process_date(date)
 
-    logging.info("Done.")
+    logging.info("Uploader done.")
 
 
 if __name__ == "__main__":
     try:
         main()
     except Exception:
-        logging.exception("Main failed")
+        logging.exception("Video uploader main failed")

@@ -5,12 +5,10 @@ import logging
 import os
 from datetime import datetime
 
-import progressbar
 import whisper
 from photo_importer import fileprop
 
-from mmdiary.utils import log
-from mmdiary.utils import medialib
+from mmdiary.utils import log, medialib, progressbar
 from mmdiary.utils.medialib import TIME_OUT_FORMAT
 
 from mmdiary.transcriber.verifier import check_text
@@ -106,19 +104,7 @@ def main():
     tr = Transcriber("medium")
     print("done")
 
-    pbar = progressbar.ProgressBar(
-        maxval=len(fileslist),
-        widgets=[
-            "Transcribe: ",
-            progressbar.SimpleProgress(),
-            " (",
-            progressbar.Percentage(),
-            ") ",
-            progressbar.Bar(),
-            " ",
-            progressbar.ETA(),
-        ],
-    ).start()
+    pbar = progressbar.start("Transcribe", len(fileslist))
 
     for af in fileslist:
         try:

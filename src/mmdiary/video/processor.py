@@ -8,9 +8,8 @@ import random
 from datetime import datetime
 
 import mixvideoconcat
-import progressbar
 
-from mmdiary.utils import log, datelib
+from mmdiary.utils import log, datelib, progressbar
 from mmdiary.utils.medialib import TIME_OUT_FORMAT
 
 
@@ -76,27 +75,13 @@ class VideoProcessor:
         nonprocessed = list(self.__lib.get_nonprocessed())
         random.shuffle(nonprocessed)
 
-        pbar = progressbar.ProgressBar(
-            maxval=len(nonprocessed),
-            widgets=[
-                "Process: ",
-                progressbar.SimpleProgress(),
-                " (",
-                progressbar.Percentage(),
-                ") ",
-                progressbar.Bar(),
-                ' ',
-                progressbar.ETA(),
-            ],
-        ).start()
-
+        pbar = progressbar.start("Process", len(nonprocessed))
         for date, _ in nonprocessed:
             try:
                 self.process_date(date)
             except Exception:
                 logging.exception("Video processing failed")
             pbar.increment()
-
         pbar.finish()
 
 
@@ -121,11 +106,11 @@ def main():
         for date in args.dates:
             vp.process_date(date)
 
-    logging.info("Done.")
+    logging.info("Processor done.")
 
 
 if __name__ == "__main__":
     try:
         main()
     except Exception:
-        logging.exception("Main failed")
+        logging.exception("Video processor main failed")
