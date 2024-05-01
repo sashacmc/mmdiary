@@ -4,17 +4,21 @@ import argparse
 import json
 import os
 
+DESCRIPTION = """
+Search for text in transcribed files.
+"""
+
 JSON_EXT = ".json"
 
 
-def load_json(file):
+def __load_json(file):
     with open(file, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
 def process_list(fileslist, text):
     for file in fileslist:
-        data = load_json(file)
+        data = __load_json(file)
         tp = data["type"]
         if tp not in ("audio", "video"):
             return
@@ -25,7 +29,7 @@ def process_list(fileslist, text):
             print()
 
 
-def scan_files(inpath):
+def __scan_files(inpath):
     res = []
     for root, _, files in os.walk(inpath):
         for fname in files:
@@ -36,18 +40,20 @@ def scan_files(inpath):
     return res
 
 
-def args_parse():
-    parser = argparse.ArgumentParser()
+def __args_parse():
+    parser = argparse.ArgumentParser(
+        description=DESCRIPTION, formatter_class=argparse.RawTextHelpFormatter
+    )
     parser.add_argument('inpath', nargs="+", help='Input path(s)')
     parser.add_argument("text", help="Text for search")
     return parser.parse_args()
 
 
 def main():
-    args = args_parse()
+    args = __args_parse()
 
     for path in args.inpath:
-        process_list(scan_files(path), args.text)
+        process_list(__scan_files(path), args.text)
 
 
 if __name__ == '__main__':

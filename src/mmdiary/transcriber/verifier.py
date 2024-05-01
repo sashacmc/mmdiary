@@ -12,7 +12,19 @@ from mmdiary.utils import log
 from mmdiary.notion import cachedb
 from mmdiary.utils.medialib import JSON_EXT, TIME_OUT_FORMAT
 
-CACHE_DB_FILE = "~/.notion_upload.sqlite3"
+DESCRIPTION = """
+Verify transcribed file(s).
+Check recognized text/caption for neural network hallucination markers.
+
+If sync option specified the script will addionally check sync with notion:
+    local - check local files and remove missed files from notion 
+    notion - check notion cache and remove missed local files 
+    all - include `local` and `notion`
+
+Sync check require following environment variables:
+    NOTION_TOKEN - Notion web auth token
+    NOTION_CACHE_DB_FILE - Cachedb file
+"""
 
 HALLUCINATION_TEXTS = [
     "Игорь Негода",
@@ -112,7 +124,7 @@ class Verifier:
         self.__force = force
         self.__sync_local = sync in ('all', 'local')
         self.__sync_notion = sync in ('all', 'notion')
-        self.__cache = cachedb.CacheDB(CACHE_DB_FILE)
+        self.__cache = cachedb.CacheDB(os.getenv("NOTION_CACHE_DB_FILE"))
         self.__notion = NotionClient(token_v2=os.getenv("NOTION_TOKEN"))
 
         self.__local_sources = {}
@@ -120,16 +132,16 @@ class Verifier:
         if len(self.__cache.list_existing_pages()) == 0:
             logging.warning("Empty cache")
 
-    def load_json(self, file):
+    def __load_json(self, file):
         with open(file, "r", encoding="utf-8") as f:
             return json.load(f)
 
-    def save_json(self, file, cont):
+    def __save_json(self, file, cont):
         cont["processtime"] = datetime.now().strftime(TIME_OUT_FORMAT)
         with open(file, "w", encoding="utf-8") as f:
             json.dump(cont, f, ensure_ascii=False, indent=2)
 
-    def check_update_data(self, data):
+    def __check_update_data(self, data):
         res = False
         new_caption = check_text(data["caption"])
         if new_caption != data["caption"]:
@@ -143,7 +155,7 @@ class Verifier:
 
         return res
 
-    def check_audio_json(self, data):
+    def __check_audio_json(self, data):
         if "source" not in data:
             return RES_OK
 
@@ -151,7 +163,7 @@ class Verifier:
             if len(data.get(f, "").strip()) == 0:
                 return RES_TO_DELETE
 
-        if self.check_update_data(data):
+        if self.__check_update_data(data):
             return RES_TO_UPDATE
 
         local_source = self.__local_sources.get(data["source"], None)
@@ -161,21 +173,21 @@ class Verifier:
         self.__local_sources[data["source"]] = data
         return RES_OK
 
-    def check_video_json(self, data):
-        if self.check_update_data(data):
+    def __check_video_json(self, data):
+        if self.__check_update_data(data):
             return RES_TO_UPDATE
         return RES_OK
 
-    def get_source_file(self, in_file, src_file):
+    def __get_source_file(self, in_file, src_file):
         return os.path.join(os.path.dirname(in_file), src_file)
 
-    def ask_for_delete(self):
-        return self.ask_for("Delete files")
+    def __ask_for_delete(self):
+        return self.__ask_for("Delete files")
 
-    def ask_for_cleanup(self):
-        return self.ask_for("Cleanup file")
+    def __ask_for_cleanup(self):
+        return self.__ask_for("Cleanup file")
 
-    def ask_for(self, action):
+    def __ask_for(self, action):
         if self.__dryrun:
             return False
 
@@ -188,13 +200,13 @@ class Verifier:
                 r = "y"
         return r == "y"
 
-    def delete_from_notion(self, source, bid):
+    def __delete_from_notion(self, source, bid):
         self.__cache.remove_from_existing_pages(source)
         block = self.__notion.get_block(bid)
         block.remove()
         logging.info("removed from notion")
 
-    def delete_from_fs(self, source, file):
+    def __delete_from_fs(self, source, file):
         if os.path.isfile(source):
             os.unlink(source)
         else:
@@ -203,31 +215,31 @@ class Verifier:
         logging.info("removed from fs")
 
     def process(self, file):
-        data = self.load_json(file)
+        data = self.__load_json(file)
         tp = data["type"]
         if tp == "audio":
-            return self.process_audio(file, data)
+            return self.__process_audio(file, data)
         if tp == "video":
-            return self.process_video(file, data)
+            return self.__process_video(file, data)
         logging.warning("Unsupported type: '%s' in file: %s", tp, file)
         return RES_OK
 
-    def process_audio(self, file, data):
+    def __process_audio(self, file, data):
         res = True
         uploaded = self.__cache.check_existing_pages(data.get("source", ""))
-        source = self.get_source_file(file, data.get("source", ""))
-        check_res = self.check_audio_json(data)
+        source = self.__get_source_file(file, data.get("source", ""))
+        check_res = self.__check_audio_json(data)
         if check_res != RES_OK:
             res = False
             print(file)
             print(source)
             print("notion:", uploaded)
-            if check_res == RES_TO_DELETE and self.ask_for_delete():
+            if check_res == RES_TO_DELETE and self.__ask_for_delete():
                 if uploaded is not None:
-                    self.delete_from_notion(data["source"], uploaded[1])
-                self.delete_from_fs(source, file)
-            elif check_res == RES_TO_UPDATE and self.ask_for_cleanup():
-                self.save_json(file, data)
+                    self.__delete_from_notion(data["source"], uploaded[1])
+                self.__delete_from_fs(source, file)
+            elif check_res == RES_TO_UPDATE and self.__ask_for_cleanup():
+                self.__save_json(file, data)
                 print("cleaned")
 
             print()
@@ -239,21 +251,21 @@ class Verifier:
             print("Deleted from notion:")
             print(file)
             print(source)
-            if self.ask_for_delete():
-                self.delete_from_fs(source, file)
+            if self.__ask_for_delete():
+                self.__delete_from_fs(source, file)
             print()
         return res
 
-    def process_video(self, file, data):
+    def __process_video(self, file, data):
         res = True
-        source = self.get_source_file(file, data.get("source", ""))
-        check_res = self.check_video_json(data)
+        source = self.__get_source_file(file, data.get("source", ""))
+        check_res = self.__check_video_json(data)
         if check_res != RES_OK:
             res = False
             print(file)
             print(source)
-            if self.ask_for_cleanup():
-                self.save_json(file, data)
+            if self.__ask_for_cleanup():
+                self.__save_json(file, data)
                 print("cleaned")
             print()
         return res
@@ -274,11 +286,11 @@ class Verifier:
             if source not in self.__local_sources:
                 print("Deleted local:")
                 print("notion:", source, bid)
-                if self.ask_for_delete():
-                    self.delete_from_notion(source, bid)
+                if self.__ask_for_delete():
+                    self.__delete_from_notion(source, bid)
 
 
-def __scan_files(inpath):
+def scan_files(inpath):
     res = []
     for root, _, files in os.walk(inpath):
         for fname in files:
@@ -289,10 +301,14 @@ def __scan_files(inpath):
     return res
 
 
-def args_parse():
-    parser = argparse.ArgumentParser()
+def __args_parse():
+    parser = argparse.ArgumentParser(
+        description=DESCRIPTION, formatter_class=argparse.RawTextHelpFormatter
+    )
     parser.add_argument('inpath', nargs="+", help='Input path(s)')
-    parser.add_argument('-d', '--dryrun', help='Dry run', action='store_true')
+    parser.add_argument(
+        '-d', '--dryrun', help='Dry run (just check without any modifications)', action='store_true'
+    )
     parser.add_argument('-l', '--logfile', help='Log file', default=None)
     parser.add_argument(
         '-s',
@@ -314,7 +330,7 @@ def args_parse():
 
 
 def main():
-    args = args_parse()
+    args = __args_parse()
     log.init_logger(args.logfile, logging.DEBUG)
     logging.getLogger("urllib3").setLevel(logging.ERROR)
 
@@ -325,7 +341,7 @@ def main():
         if os.path.isfile(path):
             fileslist = (path,)
         elif os.path.isdir(path):
-            fileslist = __scan_files(path)
+            fileslist = scan_files(path)
         vf.process_list(fileslist)
 
 

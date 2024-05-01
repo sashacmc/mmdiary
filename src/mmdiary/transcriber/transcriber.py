@@ -1,11 +1,11 @@
 #!/usr/bin/python3
+# pylint: disable=import-outside-toplevel,too-few-public-methods
 
 import argparse
 import logging
 import os
 from datetime import datetime
 
-import whisper
 from photo_importer import fileprop
 
 from mmdiary.utils import log, medialib, progressbar
@@ -13,18 +13,25 @@ from mmdiary.utils.medialib import TIME_OUT_FORMAT
 
 from mmdiary.transcriber.verifier import check_text
 
+DESCRIPTION = """
+Transcribes audio/video file(s).
+Result will be saved to json file along with the original file.
+"""
+
 
 class Transcriber:
     def __init__(self, model):
+        import whisper
+
         logging.info("Transcriber initialization...")
         self.__model = whisper.load_model(model)
         self.__modelname = "whisper/" + model
         logging.info("Transcriber inited")
 
-    def transcribe(self, file):
+    def __transcribe(self, file):
         return self.__model.transcribe(file.name(), language="ru")
 
-    def extract_caption(self, text):
+    def __extract_caption(self, text):
         res = ""
         if len(text) != 0:
             res = text[0].upper()
@@ -34,12 +41,12 @@ class Transcriber:
                     break
         return res.strip()
 
-    def to_text(self, res):
+    def __to_text(self, res):
         if "segments" in res:
             return "\n".join([s.get("text", "").strip() for s in res["segments"]])
         return ""
 
-    def duration(self, res):
+    def __duration(self, res):
         if "segments" in res:
             if len(res["segments"]) > 0:
                 return res["segments"][-1]["end"]
@@ -58,17 +65,17 @@ class Transcriber:
             logging.info("Not audio file, skip")
             return
 
-        res = self.transcribe(file)
-        text = self.to_text(res)
+        res = self.__transcribe(file)
+        text = self.__to_text(res)
         text = check_text(text)
 
         cont = {
-            "caption": self.extract_caption(text),
+            "caption": self.__extract_caption(text),
             "text": text,
             "model": self.__modelname,
             "type": tp,
             "source": os.path.split(file.name())[1],
-            "duration": self.duration(res),
+            "duration": self.__duration(res),
             "recordtime": prop.time().strftime(TIME_OUT_FORMAT) if prop.time() is not None else "",
             "processtime": datetime.now().strftime(TIME_OUT_FORMAT),
         }
@@ -79,8 +86,10 @@ class Transcriber:
 
 
 def __args_parse():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('inpath', help='Input path')
+    parser = argparse.ArgumentParser(
+        description=DESCRIPTION, formatter_class=argparse.RawTextHelpFormatter
+    )
+    parser.add_argument('inpath', help='Input path (single file or dir for search)')
     parser.add_argument('-l', '--logfile', help='Log file', default=None)
     parser.add_argument('-u', '--update', help='Update existing', action='store_true')
     return parser.parse_args()
@@ -118,7 +127,4 @@ def main():
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception:
-        logging.exception("Main failed")
+    main()
