@@ -8,7 +8,7 @@ from datetime import datetime
 
 import cachedb
 import log
-from audiolib import JSON_EXT, TIME_OUT_FORMAT
+from medialib import JSON_EXT, TIME_OUT_FORMAT
 from notion.client import NotionClient
 
 CACHE_DB_FILE = "~/.notion_upload.sqlite3"

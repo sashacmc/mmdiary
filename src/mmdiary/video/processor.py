@@ -11,7 +11,7 @@ import datelib
 import log
 import mixvideoconcat
 import progressbar
-from audiolib import TIME_OUT_FORMAT
+from medialib import TIME_OUT_FORMAT
 
 
 class VideoProcessor:

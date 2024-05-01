@@ -5,11 +5,11 @@ import logging
 import os
 from datetime import datetime
 
-import audiolib
 import log
+import medialib
 import progressbar
 import whisper
-from audiolib import TIME_OUT_FORMAT
+from medialib import TIME_OUT_FORMAT
 from photo_importer import fileprop
 from verifier import check_text
 
@@ -98,9 +98,9 @@ def main():
 
     fileslist = []
     if os.path.isfile(args.inpath):
-        fileslist = (audiolib.AudioFile(args.inpath),)
+        fileslist = (medialib.MediaFile(args.inpath),)
     elif os.path.isdir(args.inpath):
-        lib = audiolib.AudioLib(args.inpath)
+        lib = medialib.MediaLib(args.inpath)
         fileslist = lib.get_all() if args.update else lib.get_new()
 
     if len(fileslist) == 0:

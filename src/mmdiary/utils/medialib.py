@@ -14,7 +14,7 @@ JSON_EXT = ".json"
 g_fileprop = fileprop.FileProp(pi_config.Config())
 
 
-class AudioFile:
+class MediaFile:
     def __init__(self, filename):
         self.__filename = filename
         self.__prop = None
@@ -61,7 +61,7 @@ class AudioFile:
         return self.__filename
 
 
-class AudioLib:
+class MediaLib:
     def __init__(self, root=None):
         if root is None:
             root = os.getenv("AUDIO_NOTES_ROOT")
@@ -92,7 +92,7 @@ class AudioLib:
 
     def get_all(self):
         files = self.__scan_files(self.__root)
-        return [AudioFile(f) for f in files]
+        return [MediaFile(f) for f in files]
 
     def get_processed(self):
         return list(filter(lambda af: af.has_json(), self.get_all()))
@@ -126,7 +126,7 @@ def get_date_from_timestring(time):
 
 
 def main():
-    lib = AudioLib()
+    lib = MediaLib()
     for f in lib.get_new():
         print(f)
 

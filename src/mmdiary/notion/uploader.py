@@ -5,9 +5,9 @@ import argparse
 import logging
 import os
 
-import audiolib
 import cachedb
 import log
+import medialib
 import progressbar
 from notion.block import AudioBlock, CalloutBlock, TextBlock
 from notion.client import NotionClient
@@ -146,7 +146,7 @@ class NotionUploader:
 
         bid = self.add_row(
             title=data["caption"],
-            date=audiolib.get_date_from_timestring(data["recordtime"]),
+            date=medialib.get_date_from_timestring(data["recordtime"]),
             source=data["source"],
             processtime=data["processtime"],
             icon="🎙️",
@@ -164,7 +164,7 @@ class NotionUploader:
             info = audio.upload_file(fname)
             logging.debug("Audio uploaded: %s", info)
 
-            for block in audiolib.split_large_text(data["text"], MAX_TEXT_SIZE):
+            for block in medialib.split_large_text(data["text"], MAX_TEXT_SIZE):
                 res.children.add_new(TextBlock, title=block)
 
             res.set("format.block_locked", True)
@@ -246,9 +246,9 @@ def main():
 
     fileslist = []
     if os.path.isfile(args.inpath):
-        fileslist = (audiolib.AudioFile(args.inpath),)
+        fileslist = (medialib.MediaFile(args.inpath),)
     elif os.path.isdir(args.inpath):
-        lib = audiolib.AudioLib(args.inpath)
+        lib = medialib.MediaLib(args.inpath)
         fileslist = lib.get_processed()
 
     if len(fileslist) == 0:

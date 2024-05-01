@@ -5,9 +5,9 @@ import logging
 import os
 import sqlite3
 
-import audiolib
 import log
-from audiolib import get_date_from_timestring
+import medialib
+from medialib import get_date_from_timestring
 
 PROCESSED_NONE = 0
 PROCESSED_IN_PROCESS = 1
@@ -162,7 +162,7 @@ class DateLib:
                              WHERE date=?",
             (date,),
         )
-        afs = [audiolib.AudioFile(row[0]) for row in res.fetchall()]
+        afs = [medialib.MediaFile(row[0]) for row in res.fetchall()]
         afs.sort(key=lambda af: af.json()["recordtime"])
         if for_upload:
             afs = list(filter(lambda af: af.json().get("upload", True), afs))
@@ -171,7 +171,7 @@ class DateLib:
     def scan(self):
         for path in self.__scan_paths:
             logging.info("Process: %s", path)
-            al = audiolib.AudioLib(path)
+            al = medialib.MediaLib(path)
             for af in al.get_processed():
                 fname = af.name()
                 if self.check_file(fname) is None:
@@ -185,7 +185,7 @@ class DateLib:
         if date is None:
             logging.warning("File not in DB")
 
-        af = audiolib.AudioFile(filename)
+        af = medialib.MediaFile(filename)
         data = af.json()
         data["upload"] = False
         af.save_json(data)

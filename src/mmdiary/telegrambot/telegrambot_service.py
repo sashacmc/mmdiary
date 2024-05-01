@@ -6,8 +6,8 @@ import random
 from collections import defaultdict
 from datetime import datetime
 
-import audiolib
 import log
+import medialib
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     Application,
@@ -19,7 +19,7 @@ from telegram.ext import (
     filters,
 )
 
-g_audiofiles = audiolib.AudioLib().get_processed()
+g_audiofiles = medialib.MediaLib().get_processed()
 MAX_MESSAGE_SIZE = 1024
 
 
@@ -111,7 +111,7 @@ class DateSelector:
 
 def audiofile_to_message(audiofile):
     data = audiofile.load_json()
-    texts = audiolib.split_large_text(data["text"], MAX_MESSAGE_SIZE)
+    texts = medialib.split_large_text(data["text"], MAX_MESSAGE_SIZE)
 
     return {
         "audio": audiofile.name(),
