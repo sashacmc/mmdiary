@@ -5,7 +5,7 @@ import argparse
 import logging
 import os
 
-from notion.block import AudioBlock, CalloutBlock, TextBlock
+from notion.block import AudioBlock, CalloutBlock, TextBlock, VideoBlock
 from notion.client import NotionClient
 from notion.collection import CollectionRowBlock
 from notion_client import Client
@@ -148,7 +148,7 @@ class NotionUploader:
 
         return res["id"]
 
-    def __create_page(self, data, fname):
+    def __create_audio_page(self, data, fname):
         if self.__dry_run:
             self.__status["created"] += 1
             return
@@ -186,6 +186,42 @@ class NotionUploader:
 
         self.__status["created"] += 1
 
+    def __create_video_page(self, data):
+        if self.__dry_run:
+            self.__status["created"] += 1
+            return
+
+        date = medialib.get_date_from_timestring(data["recordtime"])
+
+        bid = self.__add_row(
+            title=date,
+            date=date,
+            source=data["source"],
+            processtime=data["processtime"],
+            icon="📹",
+        )
+        try:
+            res = self.__notion.get_block(bid)
+            video = res.children.add_new(VideoBlock)
+            video.set_source_url(data["url"])
+
+            for video in data["videos"]:
+                text = video["text"]
+                if text == "":
+                    continue
+                text = medialib.get_time_from_timestring(video["timestamp"]) + "\n" + text
+                res.children.add_new(TextBlock, title=text)
+
+            res.set("format.block_locked", True)
+
+            self.__add_existing_page(data["source"], data["processtime"], res.id)
+        except Exception:
+            logging.warning("Delete uncompleate page for: %s", date)
+            self.__delete_page(None, bid)
+            raise
+
+        self.__status["created"] += 1
+
     def __check_json(self, data):
         for f in ("recordtime", "processtime", "source"):
             if len(data[f].strip()) == 0:
@@ -201,7 +237,13 @@ class NotionUploader:
         if self.__check_existing(data, True):
             return
 
-        self.__create_page(data, file.name())
+        tp = data.get("type")
+        if tp == "audio":
+            self.__create_audio_page(data, file.name())
+        elif tp == "mergedvideo":
+            self.__create_video_page(data)
+        else:
+            raise UserWarning("Unknown json type: {tp}")
 
         logging.info("Saved")
 

@@ -15,8 +15,17 @@ g_fileprop = fileprop.FileProp(pi_config.Config())
 
 
 class MediaFile:
-    def __init__(self, filename):
+    def __init__(self, filename, jsonname=None):
+        if filename is None and jsonname is None:
+            raise UserWarning("filename and jsonname is None")
         self.__filename = filename
+        self.__jsonname = jsonname
+        if self.__jsonname is None:
+            self.__jsonname = os.path.splitext(filename)[0] + JSON_EXT
+
+        self.__has_file = self.__filename is not None and os.path.exists(self.__filename)
+        self.__has_json = self.__jsonname is not None and os.path.exists(self.__jsonname)
+
         self.__prop = None
         self.__json = None
 
@@ -24,10 +33,13 @@ class MediaFile:
         return self.__filename
 
     def json_name(self):
-        return os.path.splitext(self.name())[0] + JSON_EXT
+        return self.__jsonname
 
     def has_json(self):
-        return os.path.exists(self.json_name())
+        return self.__has_json
+
+    def has_file(self):
+        return self.__has_file
 
     def load_json(self):
         if not self.has_json():
@@ -40,6 +52,7 @@ class MediaFile:
         with open(self.json_name(), "w", encoding="utf-8") as f:
             json.dump(cont, f, ensure_ascii=False, indent=2)
         self.__json = cont
+        self.__has_json = True
 
     def json(self):
         if self.__json is None:
@@ -55,10 +68,10 @@ class MediaFile:
         return self.name() < other.name()
 
     def __repr__(self):
-        return self.__filename
+        return self.__filename if self.__filename is not None else self.__jsonname
 
     def __str__(self):
-        return self.__filename
+        return self.__filename if self.__filename is not None else self.__jsonname
 
 
 class MediaLib:
@@ -74,23 +87,27 @@ class MediaLib:
         logging.error('scan files error: %s', err)
 
     def __scan_files(self, inpath):
-        res = []
+        res_files = {}
+        json_files = {}
         for root, _, files in os.walk(inpath, onerror=self.__on_walk_error):
-            dup = set()
             for fname in files:
                 base, ext = os.path.splitext(fname)
-                if ext.lower() in self.__supported_exts:
-                    if base in dup:
+                lext = ext.lower()
+                if lext in self.__supported_exts:
+                    if base in res_files:
                         logging.error('duplicate %s in %s', base, root)
-                    res.append(os.path.join(root, fname))
-                    dup.add(base)
+                    res_files[base] = os.path.join(root, fname)
+                elif lext == JSON_EXT:
+                    json_files[base] = os.path.join(root, fname)
 
-        res.sort()
-        return res
+        return res_files, json_files
 
     def get_all(self):
-        files = self.__scan_files(self.__root)
-        return [MediaFile(f) for f in files]
+        files, json_files = self.__scan_files(self.__root)
+        return [
+            MediaFile(files.get(base, None), json_files.get(base, None))
+            for base in set(files.keys()) | set(json_files.keys())
+        ]
 
     def get_processed(self):
         return list(filter(lambda af: af.has_json(), self.get_all()))
@@ -121,6 +138,10 @@ def split_large_text(text, max_block_size):
 
 def get_date_from_timestring(time):
     return time[:10]
+
+
+def get_time_from_timestring(time):
+    return time[10:]
 
 
 def main():

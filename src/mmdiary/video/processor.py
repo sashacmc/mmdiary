@@ -25,11 +25,13 @@ class VideoProcessor:
 
         logging.debug("Update existing (not used): %s", self.__update_existing)
 
-    def __save_json(self, videos_info, processduration, filename):
+    def __save_json(self, videos_info, processduration, date, filename):
         data = {
             "videos": videos_info,
             "processduration": processduration,
             "processtime": datetime.now().strftime(TIME_OUT_FORMAT),
+            "source": os.path.split(filename)[1],
+            "recordtime": date,
             "type": "mergedvideo",
         }
         with open(filename, "w", encoding="utf-8") as f:
@@ -55,7 +57,7 @@ class VideoProcessor:
             videos_info.append(info)
 
         processduration = (datetime.now() - starttime).total_seconds()
-        self.__save_json(videos_info, processduration, resfilename_json)
+        self.__save_json(videos_info, processduration, date, resfilename_json)
 
         logging.info("Done: %s", date)
 

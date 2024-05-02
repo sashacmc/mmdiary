@@ -117,6 +117,14 @@ class VideoUploader:
         with open(filename, "r", encoding="utf-8") as f:
             return json.load(f)
 
+    def __save_json(self, filename, cont, url):
+        cont["source"] = os.path.split(filename)[1]  # to do remove in future
+        cont["recordtime"] = os.path.splitext(cont["source"])[0]  # to do remove in future
+
+        cont["url"] = url
+        with open(filename, "w", encoding="utf-8") as f:
+            json.dump(cont, f, ensure_ascii=False, indent=2)
+
     def __gen_time_labels(self, data, text_field, delimiter=" ", skip_empty=False):
         time_labels = []
         for info in data["videos"]:
@@ -214,7 +222,7 @@ class VideoUploader:
         url = generate_video_url(video_id)
         logging.info("Video uploaded: %s", url)
         self.__lib.set_uploaded(date, url)
-
+        self.__save_json(resfilename_json, data, url)
         logging.info("Upload done: %s", date)
         return True
 
