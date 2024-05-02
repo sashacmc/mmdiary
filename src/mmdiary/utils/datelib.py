@@ -193,7 +193,7 @@ class DateLib:
             al = medialib.MediaLib(path)
             for af in al.get_processed():
                 fname = af.name()
-                if self.check_file(fname) is None:
+                if af.has_file() and self.check_file(fname) is None:
                     self.add_file(
                         get_date_from_timestring(af.json()["recordtime"]),
                         fname,

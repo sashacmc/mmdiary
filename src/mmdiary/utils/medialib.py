@@ -93,12 +93,13 @@ class MediaLib:
             for fname in files:
                 base, ext = os.path.splitext(fname)
                 lext = ext.lower()
+                full_name = os.path.join(root, fname)
                 if lext in self.__supported_exts:
                     if base in res_files:
-                        logging.error('duplicate %s in %s', base, root)
-                    res_files[base] = os.path.join(root, fname)
+                        logging.error('duplicate %s, %s', full_name, res_files[base])
+                    res_files[base] = full_name
                 elif lext == JSON_EXT:
-                    json_files[base] = os.path.join(root, fname)
+                    json_files[base] = full_name
 
         return res_files, json_files
 
