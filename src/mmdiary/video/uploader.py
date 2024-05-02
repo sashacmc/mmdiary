@@ -17,6 +17,14 @@ YOUTUBE_MAX_COMMENT = 5000
 YOUTUBE_URL = "https://www.youtube.com/watch?v="
 
 
+def generate_video_url(video_id):
+    return YOUTUBE_URL + video_id
+
+
+def extract_video_id(video_url):
+    return video_url.split("v=")[1]
+
+
 def get_youtube_credentials(client_secrets, token_file):
     scopes = [
         "https://www.googleapis.com/auth/youtube.upload",
@@ -101,6 +109,9 @@ class VideoUploader:
 
         self.__lib = datelib.DateLib()
         self.__credentials = get_youtube_credentials("client_secrets.json", "token.json")
+        self.__youtube = googleapiclient.discovery.build(
+            "youtube", "v3", credentials=self.__credentials
+        )
 
     def __load_json(self, filename):
         with open(filename, "r", encoding="utf-8") as f:
@@ -122,9 +133,6 @@ class VideoUploader:
         return split_large_text(comment_text, YOUTUBE_MAX_COMMENT)
 
     def upload_video(self, fname, title, time_labels):
-        youtube = googleapiclient.discovery.build("youtube", "v3", credentials=self.__credentials)
-
-        # Upload video
         request_body = {
             "snippet": {
                 "title": title,
@@ -136,7 +144,7 @@ class VideoUploader:
 
         try:
             media_file = googleapiclient.http.MediaFileUpload(fname, chunksize=-1, resumable=True)
-            request = youtube.videos().insert(
+            request = self.__youtube.videos().insert(
                 part="snippet,status", body=request_body, media_body=media_file
             )
             logging.debug("Upload started: %s", request_body)
@@ -154,10 +162,7 @@ class VideoUploader:
             raise
 
     def add_comment(self, video_id, comment_text):
-        youtube = googleapiclient.discovery.build("youtube", "v3", credentials=self.__credentials)
-
-        # Add a comment to the video
-        request = youtube.commentThreads().insert(
+        request = self.__youtube.commentThreads().insert(
             part="snippet",
             body={
                 "snippet": {
@@ -171,7 +176,11 @@ class VideoUploader:
         response = request.execute()
         logging.debug(response)
 
-    def process_date(self, date):
+    def delete_video(self, video_id):
+        logging.info("Delete: %s", video_id)
+        self.__youtube.videos().delete(id=video_id).execute()
+
+    def __process_date(self, date, old_url):
         logging.info("Upload: %s", date)
 
         resfilename = os.path.join(self.__res_dir, f"{date}.mp4")
@@ -180,6 +189,12 @@ class VideoUploader:
         resfilename_json = os.path.join(self.__res_dir, f"{date}.json")
         if not os.path.exists(resfilename_json):
             raise FileNotFoundError(resfilename_json)
+
+        if old_url:
+            try:
+                self.delete_video(extract_video_id(old_url))
+            except Exception:
+                logging.exception("Video deletion failed")
 
         data = self.__load_json(resfilename_json)
         time_labels = self.__gen_time_labels(data, "caption")
@@ -196,20 +211,24 @@ class VideoUploader:
             except Exception:
                 logging.exception("Add comment failed")
 
-        url = YOUTUBE_URL + video_id
+        url = generate_video_url(video_id)
         logging.info("Video uploaded: %s", url)
         self.__lib.set_uploaded(date, url)
 
         logging.info("Upload done: %s", date)
         return True
 
+    def process_single(self, date):
+        old_url = self.__lib.get_url(date)
+        self.__process_date(date, old_url)
+
     def process_all(self):
         converted = list(self.__lib.get_converted())
 
         pbar = progressbar.start("Upload", len(converted))
-        for date, _ in converted:
+        for date, url in converted:
             try:
-                if not self.process_date(date):
+                if not self.__process_date(date, url):
                     return pbar.value
             except Exception:
                 logging.exception("Video uploading failed")
@@ -237,7 +256,7 @@ def main():
         res_count = vup.process_all()
     else:
         for date in args.dates:
-            vup.process_date(date)
+            vup.process_single(date)
             res_count += 1
 
     logging.info("Uploader done: %s", res_count)

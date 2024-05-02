@@ -8,12 +8,26 @@ import sqlite3
 from mmdiary.utils import log, medialib
 from mmdiary.utils.medialib import get_date_from_timestring
 
+DESCRIPTION = """
+Diary video dates DB manipulation tool
+Please declare enviromnent variables before use:
+    VIDEO_LIB_ROOTS - List of video library root dirs
+    VIDEO_LIB_DB - sqlite3 DB for store library state
+
+Possible actions:
+    scan - Scan for files transcribed video files and add them to the DB
+    disable_video - Set a flag for video file to disable concatenneting and uploading,
+                    also mark corresponded date as not processed for future regeneration
+    set_reupload - Mark a video as not uploaded for future reupload
+                   (e.g. if video was deleted on the YouTube)
+"""
+
 PROCESSED_NONE = 0
 PROCESSED_IN_PROCESS = 1
 PROCESSED_CONVERTED = 2
 PROCESSED_UPLOADED = 3
 
-SCHEMA = '''
+SCHEMA = """
 CREATE TABLE IF NOT EXISTS files (
     "date" TEXT,
     "filename" TEXT
@@ -28,7 +42,7 @@ CREATE TABLE IF NOT EXISTS dates (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS dates_date ON dates (date);
-'''
+"""
 
 
 class DateLib:
@@ -85,22 +99,28 @@ class DateLib:
         except Exception:
             logging.exception("add_file failed")
 
-    def __set_processed(self, date, processed, url):
+    def __get_dates_field(self, field, date):
+        c = self.__conn.cursor()
+        res = c.execute(
+            f"SELECT {field} FROM dates WHERE date=?",
+            (date,),
+        )
+        res = res.fetchone()
+        if len(res) != 1:
+            raise UserWarning(f"date '{date}' not found: {res}")
+        return res[0]
+
+    def get_state(self, date):
+        return self.__get_dates_field("processed", date)
+
+    def get_url(self, date):
+        return self.__get_dates_field("url", date)
+
+    def __set_state(self, date, processed, url):
         c = self.__conn.cursor()
         c.execute("begin")
         try:
-            c = self.__conn.cursor()
-            res = c.execute(
-                "SELECT processed FROM dates \
-                                  WHERE date=? ",
-                (date,),
-            )
-            res = res.fetchall()
-            if len(res) != 1:
-                raise UserWarning(f"checks processed failed: {res}")
-            if res[0][0] == processed:
-                c.execute("rollback")
-                return False
+            res = self.get_state(date) == processed
 
             if url is None:
                 c.execute(
@@ -120,23 +140,23 @@ class DateLib:
                 raise UserWarning(f"set processed failed: {c.rowcount}")
 
             c.execute("commit")
-            return True
+            return res
         except Exception:
             c.execute("rollback")
-            logging.exception("__set_processed failed")
+            logging.exception("__set_state failed")
             raise
 
     def set_not_processed(self, date):
-        return self.__set_processed(date, PROCESSED_NONE, None)
+        return self.__set_state(date, PROCESSED_NONE, None)
 
     def set_in_progress(self, date):
-        return self.__set_processed(date, PROCESSED_IN_PROCESS, None)
+        return self.__set_state(date, PROCESSED_IN_PROCESS, None)
 
     def set_converted(self, date):
-        return self.__set_processed(date, PROCESSED_CONVERTED, None)
+        return self.__set_state(date, PROCESSED_CONVERTED, None)
 
     def set_uploaded(self, date, url):
-        return self.__set_processed(date, PROCESSED_UPLOADED, url)
+        return self.__set_state(date, PROCESSED_UPLOADED, url)
 
     def __get_by_state(self, processed):
         c = self.__conn.cursor()
@@ -180,9 +200,14 @@ class DateLib:
                     )
 
     def disable_video(self, filename):
+        if filename is None:
+            logging.warning("File not specified")
+            return
+
         date = self.check_file(filename)
         if date is None:
             logging.warning("File not in DB")
+            return
 
         af = medialib.MediaFile(filename)
         data = af.json()
@@ -193,7 +218,9 @@ class DateLib:
 
 
 def __args_parse():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description=DESCRIPTION, formatter_class=argparse.RawTextHelpFormatter
+    )
     parser.add_argument(
         '-a',
         '--action',
@@ -202,9 +229,11 @@ def __args_parse():
         choices=[
             'scan',
             'disable_video',
+            'set_reupload',
         ],
     )
-    parser.add_argument('-f', '--file', help='File name')
+    parser.add_argument('-f', '--file', help='File name (for disable_video)')
+    parser.add_argument('-e', '--date', help='Date for (set_reupload)')
     return parser.parse_args()
 
 
@@ -215,8 +244,13 @@ def main():
 
     if args.action == 'scan':
         lib.scan()
-    if args.action == 'disable_video':
+    elif args.action == 'disable_video':
         lib.disable_video(args.file)
+    elif args.action == 'set_reupload':
+        if lib.get_state(args.date) != PROCESSED_UPLOADED:
+            logging.warning("Specified date not yet uploaded: %s", args.date)
+        lib.set_converted(args.date)
+    logging.info("Done.")
 
 
 if __name__ == "__main__":
