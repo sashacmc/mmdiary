@@ -12,6 +12,8 @@ from notion_client import Client
 
 from mmdiary.utils import log, medialib, progressbar
 from mmdiary.notion import cachedb
+from mmdiary.video.uploader import seconds_to_time
+
 
 DESCRIPTION = """
 Uploads transcribed file(s) to the notion database.
@@ -24,6 +26,7 @@ Please declare enviromnent variables before use:
 
 
 MAX_TEXT_SIZE = 2000
+MAX_BLOCKS_BATCH_SIZE = 100
 
 
 class NotionUploader:
@@ -148,6 +151,38 @@ class NotionUploader:
 
         return res["id"]
 
+    def __gen_video_description_block(self, timestamp, url, time, text):
+        return {
+            "object": "block",
+            "type": "paragraph",
+            "paragraph": {
+                "rich_text": [
+                    {
+                        "type": "text",
+                        "text": {"content": timestamp, "link": {"url": url}},
+                        "annotations": {
+                            "bold": True,
+                        },
+                    },
+                    {
+                        "type": "text",
+                        "text": {
+                            "content": f" - {time}\n",
+                        },
+                        "annotations": {
+                            "bold": True,
+                        },
+                    },
+                    {
+                        "type": "text",
+                        "text": {
+                            "content": text,
+                        },
+                    },
+                ],
+            },
+        }
+
     def __create_audio_page(self, data, fname):
         if self.__dry_run:
             self.__status["created"] += 1
@@ -192,6 +227,7 @@ class NotionUploader:
             return
 
         date = medialib.get_date_from_timestring(data["recordtime"])
+        url = data["url"]
 
         bid = self.__add_row(
             title=date,
@@ -203,14 +239,27 @@ class NotionUploader:
         try:
             res = self.__notion.get_block(bid)
             video = res.children.add_new(VideoBlock)
-            video.set_source_url(data["url"])
+            video.set_source_url(url)
 
+            blocks = []
+            pos = 0.0
             for video in data["videos"]:
                 text = video["text"]
-                if text == "":
-                    continue
-                text = medialib.get_time_from_timestring(video["timestamp"]) + "\n" + text
-                res.children.add_new(TextBlock, title=text)
+                if text != "":
+                    blocks.append(
+                        self.__gen_video_description_block(
+                            seconds_to_time(int(pos)),
+                            f"{url}&t={int(pos)}s",
+                            medialib.get_time_from_timestring(video["timestamp"]),
+                            text,
+                        )
+                    )
+                pos += float(video["duration"])
+
+            for i in range(0, len(blocks), MAX_BLOCKS_BATCH_SIZE):
+                self.__notion_api.blocks.children.append(
+                    bid, children=blocks[i : i + MAX_BLOCKS_BATCH_SIZE]
+                )
 
             res.set("format.block_locked", True)
 

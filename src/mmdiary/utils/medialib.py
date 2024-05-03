@@ -11,6 +11,8 @@ TIME_OUT_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 JSON_EXT = ".json"
 
+NO_SCAN_MARKER = ".mmdiaryskip"
+
 g_fileprop = fileprop.FileProp(pi_config.Config())
 
 
@@ -90,6 +92,8 @@ class MediaLib:
         res_files = {}
         json_files = {}
         for root, _, files in os.walk(inpath, onerror=self.__on_walk_error):
+            if NO_SCAN_MARKER in files:
+                continue
             for fname in files:
                 base, ext = os.path.splitext(fname)
                 lext = ext.lower()
