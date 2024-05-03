@@ -88,13 +88,15 @@ class CacheDB:
             print(f"Property '{name}' not found in {row}")
             return default
 
-    def sync_existing_pages(self, notion_api, database_id):
+    def sync_existing_pages(self, notion_api, database_ids):
         self.clean_existing_pages()
 
-        res = iterate_paginated_api(
-            notion_api.databases.query,
-            database_id=database_id,
-        )
+        res = []
+        for database_id in set(database_ids):
+            res += iterate_paginated_api(
+                notion_api.databases.query,
+                database_id=database_id,
+            )
 
         duplicates = ""
 
@@ -147,7 +149,10 @@ def main():
     elif args.action == 'remove':
         db.remove_from_existing_pages(args.file)
     elif args.action == 'sync':
-        db.sync_existing_pages(Client(auth=os.getenv("NOTION_API_KEY")), os.getenv("NOTION_DB_ID"))
+        db.sync_existing_pages(
+            Client(auth=os.getenv("NOTION_API_KEY")),
+            (os.getenv("NOTION_AUDIO_DB_ID"), os.getenv("NOTION_VIDEO_DB_ID")),
+        )
 
 
 if __name__ == '__main__':

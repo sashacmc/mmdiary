@@ -1,9 +1,10 @@
 #!/usr/bin/python3
-# pylint: disable=too-many-arguments
+# pylint: disable=too-many-arguments,too-many-instance-attributes
 
 import argparse
 import logging
 import os
+import sys
 
 from notion.block import AudioBlock, CalloutBlock, TextBlock, VideoBlock
 from notion.client import NotionClient
@@ -18,9 +19,13 @@ from mmdiary.video.uploader import seconds_to_time
 DESCRIPTION = """
 Uploads transcribed file(s) to the notion database.
 Please declare enviromnent variables before use:
-    NOTION_TOKEN - Notion web auth token
-    NOTION_API_KEY - Notion API key
-    NOTION_DB_ID - Notion Database ID
+    NOTION_TOKEN - Notion web auth token, please obtain the `token_v2` value by inspectingn
+        your browser cookies on a logged-in (non-guest) session on Notion.so
+    NOTION_API_KEY - Notion API key, please create notion integration and provide an API key
+        see details there: https://www.notion.so/my-integrations
+        (don't forget to share your page/workspace with the integration you created)
+    NOTION_AUDIO_DB_ID - Notion Database ID for Audio Notes (can be created by --init command)
+    NOTION_VIDEO_DB_ID - Notion Database ID for Video Diary (can be created by --init command)
     NOTION_CACHE_DB_FILE - Cachedb file
 """
 
@@ -34,7 +39,8 @@ class NotionUploader:
         self,
         token,
         api_key,
-        database_id,
+        audio_db_id,
+        video_db_id,
         cache_db_file,
         force_update=False,
         dry_run=False,
@@ -52,7 +58,8 @@ class NotionUploader:
         self.__force_update = force_update
         self.__notion = NotionClient(token_v2=token, enable_caching=False)
 
-        self.__database_id = database_id
+        self.__audio_db_id = audio_db_id
+        self.__video_db_id = video_db_id
         self.__notion_api = Client(auth=api_key)
 
         self.__init_existing_pages()
@@ -64,7 +71,9 @@ class NotionUploader:
         cnt = len(self.__cache.list_existing_pages())
         if cnt == 0 and not self.__dry_run:
             logging.info("Cache empty, init...")
-            self.__cache.sync_existing_pages(self.__notion_api, self.__database_id)
+            self.__cache.sync_existing_pages(
+                self.__notion_api, (self.__audio_db_id, self.__video_db_id)
+            )
             cnt = len(self.__cache.list_existing_pages())
 
         self.__status["existing_init"] = cnt
@@ -115,11 +124,71 @@ class NotionUploader:
 
     def __filter_existing(self, file):
         data = file.load_json()
-        self.__check_json(data)
+        try:
+            self.__check_json(data)
+        except Exception:
+            return True
 
         return not self.__check_existing(data, False)
 
-    def __add_row(self, title, date, source, processtime, icon):
+    def __create_database(self, parent_page_id, icon, title, fields):
+        properties = {}
+        for f, tp in fields.items():
+            properties[f] = {tp: {}}
+
+        res = self.__notion_api.databases.create(
+            parent={
+                "page_id": parent_page_id,
+            },
+            icon={"type": "emoji", "emoji": icon},
+            title=[
+                {
+                    "type": "text",
+                    "text": {
+                        "content": title,
+                    },
+                }
+            ],
+            properties=properties,
+        )
+        logging.info("Database %s created: %s", title, res["id"])
+        return res["id"]
+
+    def __create_audio_database(self, parent_page_id):
+        return self.__create_database(
+            parent_page_id,
+            "📔",
+            "Audio Notes",
+            {
+                "source": "rich_text",
+                "processtime": "rich_text",
+                "Date": "date",
+                "Title": "title",
+                "Created time": "created_time",
+            },
+        )
+
+    def __create_video_database(self, parent_page_id):
+        return self.__create_database(
+            parent_page_id,
+            "📽️",
+            "Video Diary",
+            {
+                "source": "rich_text",
+                "processtime": "rich_text",
+                "Date": "date",
+                "Title": "title",
+                "Created time": "created_time",
+            },
+        )
+
+    def init_databases(self, parent_page_id):
+        audio_db_id = self.__create_audio_database(parent_page_id)
+        video_db_id = self.__create_video_database(parent_page_id)
+
+        return audio_db_id, video_db_id
+
+    def __add_row(self, db_id, title, date, source, processtime, icon):
         properties = {
             "title": {"title": [{"text": {"content": title}}]},
             "Date": {"type": "date", "date": {"start": date}},
@@ -144,7 +213,7 @@ class NotionUploader:
         }
 
         res = self.__notion_api.pages.create(
-            parent={"database_id": self.__database_id},
+            parent={"database_id": db_id},
             icon={"type": "emoji", "emoji": icon},
             properties=properties,
         )
@@ -189,6 +258,7 @@ class NotionUploader:
             return
 
         bid = self.__add_row(
+            self.__audio_db_id,
             title=data["caption"],
             date=medialib.get_date_from_timestring(data["recordtime"]),
             source=data["source"],
@@ -230,6 +300,7 @@ class NotionUploader:
         url = data["url"]
 
         bid = self.__add_row(
+            self.__video_db_id,
             title=date,
             date=date,
             source=data["source"],
@@ -317,10 +388,11 @@ def __args_parse():
     parser = argparse.ArgumentParser(
         description=DESCRIPTION, formatter_class=argparse.RawTextHelpFormatter
     )
-    parser.add_argument('inpath', help='Input path (single file or dir for search)')
-    parser.add_argument('-l', '--logfile', help='Log file', default=None)
-    parser.add_argument('-f', '--force', help='Force update (recreate all)', action='store_true')
-    parser.add_argument('-d', '--dryrun', help='Dry run', action='store_true')
+    parser.add_argument("inpath", nargs="?", help="Input path (single file or dir for search)")
+    parser.add_argument("--init", help="Init Notion databases (provide parent page ID)")
+    parser.add_argument("-l", "--logfile", help="Log file")
+    parser.add_argument("-f", "--force", help="Force update (recreate all)", action="store_true")
+    parser.add_argument("-d", "--dryrun", help="Dry run", action="store_true")
     return parser.parse_args()
 
 
@@ -330,9 +402,49 @@ def main():
     log.init_logger(args.logfile, level=logging.DEBUG)
 
     token = os.getenv("NOTION_TOKEN")
+    if not token:
+        print("NOTION_TOKEN was not set")
+        sys.exit(1)
+
     api_key = os.getenv("NOTION_API_KEY")
-    database_id = os.getenv("NOTION_DB_ID")
+    if not api_key:
+        print("NOTION_API_KEY was not set")
+        sys.exit(1)
+
+    audio_db_id = os.getenv("NOTION_AUDIO_DB_ID")
+    video_db_id = os.getenv("NOTION_VIDEO_DB_ID")
     cache_db_file = os.getenv("NOTION_CACHE_DB_FILE")
+
+    nup = NotionUploader(
+        token=token,
+        api_key=api_key,
+        audio_db_id=audio_db_id,
+        video_db_id=video_db_id,
+        cache_db_file=cache_db_file,
+        force_update=args.force,
+        dry_run=args.dryrun,
+    )
+
+    if args.init:
+        audio_db_id, video_db_id = nup.init_databases(args.init)
+        print("Databases inited")
+        print("Plase set ids to your enviromnent:")
+        print(f"export NOTION_AUDIO_DB_ID='{audio_db_id}'")
+        print(f"export NOTION_VIDEO_DB_ID='{video_db_id}'")
+        print("(don't forget to share created DBs with the your integration)")
+        return
+
+    if not api_key:
+        print("NOTION_CACHE_DB_FILE was not set")
+        sys.exit(1)
+
+    if not audio_db_id or not video_db_id:
+        print("NOTION_AUDIO_DB_ID or NOTION_VIDEO_DB_ID was not set, please use '--init'")
+        sys.exit(1)
+
+    if args.inpath is None:
+        print("Input path not provided")
+        sys.exit(1)
 
     fileslist = []
     if os.path.isfile(args.inpath):
@@ -345,18 +457,10 @@ def main():
         logging.info("Nothing to do, exit")
         return
 
-    nup = NotionUploader(
-        token=token,
-        api_key=api_key,
-        database_id=database_id,
-        cache_db_file=cache_db_file,
-        force_update=args.force,
-        dry_run=args.dryrun,
-    )
     nup.process_list(fileslist)
 
     logging.info("Done: %s", nup.status())
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
