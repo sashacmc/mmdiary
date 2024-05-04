@@ -220,37 +220,61 @@ class NotionUploader:
 
         return res["id"]
 
-    def __gen_video_description_block(self, timestamp, url, time, text):
-        return {
-            "object": "block",
-            "type": "paragraph",
-            "paragraph": {
-                "rich_text": [
-                    {
-                        "type": "text",
-                        "text": {"content": timestamp, "link": {"url": url}},
-                        "annotations": {
-                            "bold": True,
+    def __gen_video_description_blocks(self, timestamp, url, time, text):
+        max_size = MAX_TEXT_SIZE - len(url) - len(timestamp) - len(time)
+        texts = medialib.split_large_text(text, max_size)
+        first_text = texts[0]
+        blocks = [
+            {
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": [
+                        {
+                            "type": "text",
+                            "text": {"content": timestamp, "link": {"url": url}},
+                            "annotations": {
+                                "bold": True,
+                            },
                         },
+                        {
+                            "type": "text",
+                            "text": {
+                                "content": f" - {time}\n",
+                            },
+                            "annotations": {
+                                "bold": True,
+                            },
+                        },
+                        {
+                            "type": "text",
+                            "text": {
+                                "content": first_text,
+                            },
+                        },
+                    ],
+                },
+            }
+        ]
+
+        for next_text in texts[1:]:
+            blocks.append(
+                {
+                    "object": "block",
+                    "type": "paragraph",
+                    "paragraph": {
+                        "rich_text": [
+                            {
+                                "type": "text",
+                                "text": {
+                                    "content": next_text,
+                                },
+                            },
+                        ],
                     },
-                    {
-                        "type": "text",
-                        "text": {
-                            "content": f" - {time}\n",
-                        },
-                        "annotations": {
-                            "bold": True,
-                        },
-                    },
-                    {
-                        "type": "text",
-                        "text": {
-                            "content": text,
-                        },
-                    },
-                ],
-            },
-        }
+                }
+            )
+        return blocks
 
     def __create_audio_page(self, data, fname):
         if self.__dry_run:
@@ -317,14 +341,13 @@ class NotionUploader:
             for video in data["videos"]:
                 text = video["text"]
                 if text != "":
-                    blocks.append(
-                        self.__gen_video_description_block(
-                            seconds_to_time(int(pos)),
-                            f"{url}&t={int(pos)}s",
-                            medialib.get_time_from_timestring(video["timestamp"]),
-                            text,
-                        )
+                    blocks += self.__gen_video_description_blocks(
+                        seconds_to_time(int(pos)),
+                        f"{url}&t={int(pos)}s",
+                        medialib.get_time_from_timestring(video["timestamp"]),
+                        text,
                     )
+
                 pos += float(video["duration"])
 
             for i in range(0, len(blocks), MAX_BLOCKS_BATCH_SIZE):
