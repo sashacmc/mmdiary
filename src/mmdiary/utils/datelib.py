@@ -120,7 +120,9 @@ class DateLib:
         c = self.__conn.cursor()
         c.execute("begin")
         try:
-            res = self.get_state(date) == processed
+            state = self.get_state(date)
+            logging.debug("set state for date %s: %i -> %i", date, state, processed)
+            res = state != processed
 
             if url is None:
                 c.execute(
@@ -173,6 +175,9 @@ class DateLib:
 
     def get_converted(self):
         return self.__get_by_state(PROCESSED_CONVERTED)
+
+    def get_uploaded(self):
+        return self.__get_by_state(PROCESSED_UPLOADED)
 
     def get_files_by_date(self, date, for_upload=False):
         c = self.__conn.cursor()
