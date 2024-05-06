@@ -123,7 +123,7 @@ class NotionUploader:
         return True
 
     def __filter_existing(self, file):
-        data = file.load_json()
+        data = file.json()
         try:
             self.__check_json(data)
         except Exception:
@@ -391,7 +391,9 @@ class NotionUploader:
         logging.info("Saved")
 
     def process_list(self, fileslist):
+        logging.debug("fileslist len before filter: %i", len(fileslist))
         fileslist = list(filter(self.__filter_existing, fileslist))
+        logging.debug("fileslist len after filter: %i", len(fileslist))
 
         self.__status["total"] = len(fileslist)
         pbar = progressbar.start("Uploading", len(fileslist))
@@ -474,7 +476,7 @@ def main():
         fileslist = (medialib.MediaFile(args.inpath),)
     elif os.path.isdir(args.inpath):
         lib = medialib.MediaLib(args.inpath)
-        fileslist = lib.get_processed()
+        fileslist = lib.get_processed(should_have_file=False)
 
     if len(fileslist) == 0:
         logging.info("Nothing to do, exit")

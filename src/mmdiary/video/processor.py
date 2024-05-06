@@ -17,7 +17,6 @@ DESCRIPTION = """
 Concatente siary videos and generate aggregated JSON file
 Please declare enviromnent variables before use:
     VIDEO_LIB_ROOTS - List of video library root dirs
-    VIDEO_LIB_DB - sqlite3 DB for store library state
     VIDEO_PROCESSOR_WORK_DIR - Work dir for temp files (can be huge!) 
     VIDEO_PROCESSOR_RES_DIR - Result dir
 """
@@ -40,17 +39,18 @@ class VideoProcessor:
 
     def __process_date(self, date):
         logging.info("Start: %s", date)
-        mf = self.__lib.results()[date]
+        res_mf = self.__lib.results()[date]
         starttime = datetime.now()
         mfiles = self.__lib.get_files_by_date(date, for_upload=True)
         fnames = [mf.name() for mf in mfiles]
         logging.info("found %i files", len(fnames))
 
-        if os.path.exists(mf.name()):
-            os.unlink(mf.name())
+        if os.path.exists(res_mf.name()) and not self.__json_only:
+            logging.debug("Remove existing result: %s", res_mf.name())
+            os.unlink(res_mf.name())
 
         fileinfos = mixvideoconcat.concat(
-            fnames, mf.name(), self.__work_dir, dry_run=self.__json_only
+            fnames, res_mf.name(), self.__work_dir, dry_run=self.__json_only
         )
 
         videos_info = []
@@ -67,13 +67,13 @@ class VideoProcessor:
             "videos": videos_info,
             "processduration": processduration,
             "processtime": datetime.now().strftime(TIME_OUT_FORMAT),
-            "source": os.path.split(mf.name())[1],
+            "source": os.path.split(res_mf.name())[1],
             "recordtime": date,
             "type": "mergedvideo",
         }
         self.__lib.set_converted(date, fields)
 
-        logging.info("Done: %s: %s", date, mf.json_name())
+        logging.info("Done: %s: %s", date, res_mf.json_name())
 
     def process_date(self, date):
         if not self.__update_existing and not self.__json_only:
