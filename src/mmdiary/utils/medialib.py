@@ -10,6 +10,7 @@ from photo_importer import fileprop
 TIME_OUT_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 JSON_EXT = ".json"
+MP4_EXT = ".mp4"
 
 NO_SCAN_MARKER = ".mmdiaryskip"
 
@@ -20,13 +21,17 @@ class MediaFile:
     def __init__(self, filename, jsonname=None):
         if filename is None and jsonname is None:
             raise UserWarning("filename and jsonname is None")
+
         self.__filename = filename
+        if self.__filename is None:
+            self.__filename = os.path.splitext(jsonname)[0] + MP4_EXT
+
         self.__jsonname = jsonname
         if self.__jsonname is None:
             self.__jsonname = os.path.splitext(filename)[0] + JSON_EXT
 
-        self.__has_file = self.__filename is not None and os.path.exists(self.__filename)
-        self.__has_json = self.__jsonname is not None and os.path.exists(self.__jsonname)
+        self.__have_file = self.__filename is not None and os.path.exists(self.__filename)
+        self.__have_json = self.__jsonname is not None and os.path.exists(self.__jsonname)
 
         self.__prop = None
         self.__json = None
@@ -37,14 +42,14 @@ class MediaFile:
     def json_name(self):
         return self.__jsonname
 
-    def has_json(self):
-        return self.__has_json
+    def have_json(self):
+        return self.__have_json
 
-    def has_file(self):
-        return self.__has_file
+    def have_file(self):
+        return self.__have_file
 
     def load_json(self):
-        if not self.has_json():
+        if not self.have_json():
             return None
 
         with open(self.json_name(), "r", encoding="utf-8") as f:
@@ -54,7 +59,7 @@ class MediaFile:
         with open(self.json_name(), "w", encoding="utf-8") as f:
             json.dump(cont, f, ensure_ascii=False, indent=2)
         self.__json = cont
-        self.__has_json = True
+        self.__have_json = True
 
     def json(self):
         if self.__json is None:
@@ -74,6 +79,35 @@ class MediaFile:
 
     def __str__(self):
         return self.__filename if self.__filename is not None else self.__jsonname
+
+    def type(self):
+        return self.json()["type"]
+
+    def recordtime(self):
+        return self.json()["recordtime"]
+
+    def recorddate(self):
+        return get_date_from_timestring(self.recordtime())
+
+    def state(self):
+        return self.json().get("state")
+
+    def get_filed(self, filedname):
+        return self.json()[filedname]
+
+    def update_fields(self, fields):
+        if self.have_json():
+            self.json().update(fields)
+        else:
+            self.__json = fields
+        self.save_json(self.__json)
+
+    def remove_json(self):
+        if not self.__have_json:
+            return
+        os.unlink(self.json_name())
+        self.__json = None
+        self.__have_json = False
 
 
 class MediaLib:
@@ -114,11 +148,16 @@ class MediaLib:
             for base in set(files.keys()) | set(json_files.keys())
         ]
 
-    def get_processed(self):
-        return list(filter(lambda af: af.has_json(), self.get_all()))
+    def get_processed(self, should_have_file=True):
+        return list(
+            filter(
+                lambda mf: mf.have_json() and (not should_have_file or mf.have_file()),
+                self.get_all(),
+            )
+        )
 
     def get_new(self):
-        return list(filter(lambda af: not af.has_json(), self.get_all()))
+        return list(filter(lambda mf: not mf.have_json(), self.get_all()))
 
 
 def split_large_text(text, max_block_size):

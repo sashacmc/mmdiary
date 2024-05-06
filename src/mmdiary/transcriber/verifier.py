@@ -290,6 +290,7 @@ class Verifier:
                     self.__delete_from_notion(source, bid)
 
 
+# TODO: use MediaLib
 def scan_files(inpath):
     res = []
     for root, _, files in os.walk(inpath):

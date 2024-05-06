@@ -2,7 +2,6 @@
 # pylint: disable=import-outside-toplevel,no-member # because of false positive on Resource
 
 import argparse
-import json
 import logging
 import os
 from datetime import datetime
@@ -113,18 +112,6 @@ class VideoUploader:
             "youtube", "v3", credentials=self.__credentials
         )
 
-    def __load_json(self, filename):
-        with open(filename, "r", encoding="utf-8") as f:
-            return json.load(f)
-
-    def __save_json(self, filename, cont, url):
-        cont["source"] = os.path.split(filename)[1]  # to do remove in future
-        cont["recordtime"] = os.path.splitext(cont["source"])[0]  # to do remove in future
-
-        cont["url"] = url
-        with open(filename, "w", encoding="utf-8") as f:
-            json.dump(cont, f, ensure_ascii=False, indent=2)
-
     def __gen_time_labels(self, data, text_field, delimiter=" ", skip_empty=False):
         time_labels = []
         for info in data["videos"]:
@@ -188,28 +175,27 @@ class VideoUploader:
         logging.info("Delete: %s", video_id)
         self.__youtube.videos().delete(id=video_id).execute()
 
-    def __process_date(self, date, old_url):
+    def process_date(self, date):
+        mf = self.__lib.results()[date]
+        data = mf.json()
         logging.info("Upload: %s", date)
 
-        resfilename = os.path.join(self.__res_dir, f"{date}.mp4")
-        if not os.path.exists(resfilename):
-            raise FileNotFoundError(resfilename)
-        resfilename_json = os.path.join(self.__res_dir, f"{date}.json")
-        if not os.path.exists(resfilename_json):
-            raise FileNotFoundError(resfilename_json)
+        if not mf.have_file():
+            raise FileNotFoundError("Source video file not exists")
+        if not mf.have_json():
+            raise FileNotFoundError("Json file not exists")
 
-        if old_url:
+        if "url" in data:
             try:
-                self.delete_video(extract_video_id(old_url))
+                self.delete_video(extract_video_id(data["url"]))
             except Exception:
                 logging.exception("Video deletion failed")
 
-        data = self.__load_json(resfilename_json)
         time_labels = self.__gen_time_labels(data, "caption")
         comments_text = self.__gen_comments(data)
         logging.debug(comments_text)
 
-        video_id = self.upload_video(resfilename, date, time_labels)
+        video_id = self.upload_video(mf.name(), date, time_labels)
         if video_id is None:
             return False
 
@@ -222,21 +208,16 @@ class VideoUploader:
         url = generate_video_url(video_id)
         logging.info("Video uploaded: %s", url)
         self.__lib.set_uploaded(date, url)
-        self.__save_json(resfilename_json, data, url)
         logging.info("Upload done: %s", date)
         return True
-
-    def process_single(self, date):
-        old_url = self.__lib.get_url(date)
-        self.__process_date(date, old_url)
 
     def process_all(self):
         converted = list(self.__lib.get_converted())
 
         pbar = progressbar.start("Upload", len(converted))
-        for date, url in converted:
+        for date in converted:
             try:
-                if not self.__process_date(date, url):
+                if not self.process_date(date):
                     return pbar.value
             except Exception:
                 logging.exception("Video uploading failed")
@@ -264,7 +245,7 @@ def main():
         res_count = vup.process_all()
     else:
         for date in args.dates:
-            vup.process_single(date)
+            vup.process_date(date)
             res_count += 1
 
     logging.info("Uploader done: %s", res_count)
