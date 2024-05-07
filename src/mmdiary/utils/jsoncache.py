@@ -6,18 +6,25 @@ import atexit
 
 class JsonCache:
     def __init__(self):
-        self.__filename = os.path.expanduser(os.getenv("MMDIARY_CACHE"))
+        filename = os.getenv("MMDIARY_CACHE")
+        if filename is not None:
+            self.__filename = os.path.expanduser(filename)
+        else:
+            self.__filename = None
         self.__load()
+        self.__changed = False
         atexit.register(self.__save)
 
     def __load(self):
-        if not os.path.exists(self.__filename):
+        if self.__filename is None or not os.path.exists(self.__filename):
             self.__data = {}
             return
         with open(self.__filename, "rb") as f:
             self.__data = pickle.load(f)
 
     def __save(self):
+        if self.__filename is None or not self.__changed:
+            return
         with open(self.__filename, "wb") as f:
             pickle.dump(self.__data, f)
 
@@ -40,13 +47,16 @@ class JsonCache:
                 pass
             cont = self.__load_json(filename)
             self.__data[filename] = (file_stat.st_mtime, cont)
+            self.__changed = True
             return cont
         except FileNotFoundError:
             if filename in self.__data:
                 del self.__data[filename]
+                self.__changed = True
             raise
 
     def set(self, cont, filename):
         self.__save_json(cont, filename)
         file_stat = os.stat(filename)
         self.__data[filename] = (file_stat.st_mtime, cont)
+        self.__changed = True

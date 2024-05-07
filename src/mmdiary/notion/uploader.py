@@ -12,7 +12,7 @@ from notion.collection import CollectionRowBlock
 from notion_client import Client
 
 from mmdiary.utils import log, medialib, progressbar
-from mmdiary.notion import cachedb
+from mmdiary.notion import cache
 from mmdiary.video.uploader import seconds_to_time
 
 
@@ -26,7 +26,7 @@ Please declare enviromnent variables before use:
         (don't forget to share your page/workspace with the integration you created)
     NOTION_AUDIO_DB_ID - Notion Database ID for Audio Notes (can be created by --init command)
     NOTION_VIDEO_DB_ID - Notion Database ID for Video Diary (can be created by --init command)
-    NOTION_CACHE_DB_FILE - Cachedb file
+    MMDIARY_NOTION_CACHE_FILE - Cache file
 """
 
 
@@ -41,7 +41,6 @@ class NotionUploader:
         api_key,
         audio_db_id,
         video_db_id,
-        cache_db_file,
         force_update=False,
         dry_run=False,
     ):
@@ -53,7 +52,7 @@ class NotionUploader:
             "created": 0,
             "failed": 0,
         }
-        self.__cache = cachedb.CacheDB(cache_db_file)
+        self.__cache = cache.Cache()
         self.__dry_run = dry_run
         self.__force_update = force_update
         self.__notion = NotionClient(token_v2=token, enable_caching=False)
@@ -99,9 +98,9 @@ class NotionUploader:
 
         self.__status["removed"] += 1
 
-    def __check_existing(self, data, delete):
-        source = data["source"]
-        processtime = data["processtime"]
+    def __check_existing(self, file, delete):
+        source = file.get_field("source")
+        processtime = file.get_field("processtime")
         page = self.__cache.check_existing_pages(source)
         logging.debug("check_existing: %s: %s", source, page)
         if page is None:
@@ -123,13 +122,9 @@ class NotionUploader:
         return True
 
     def __filter_existing(self, file):
-        data = file.json()
-        try:
-            self.__check_json(data)
-        except Exception:
-            return True
-
-        return not self.__check_existing(data, False)
+        if not file.have_field("source"):
+            return False
+        return not self.__check_existing(file, False)
 
     def __create_database(self, parent_page_id, icon, title, fields):
         properties = {}
@@ -276,59 +271,65 @@ class NotionUploader:
             )
         return blocks
 
-    def __create_audio_page(self, data, fname):
+    def __create_audio_page(self, file):
         if self.__dry_run:
             self.__status["created"] += 1
             return
 
         bid = self.__add_row(
             self.__audio_db_id,
-            title=data["caption"],
-            date=medialib.get_date_from_timestring(data["recordtime"]),
-            source=data["source"],
-            processtime=data["processtime"],
+            title=file.get_field("caption"),
+            date=file.recorddate(),
+            source=file.get_field("source"),
+            processtime=file.get_field("processtime"),
             icon="🎙️",
         )
         try:
             res = self.__notion.get_block(bid)
             res.children.add_new(
                 CalloutBlock,
-                title=data["recordtime"],
+                title=file.recordtime(),
                 icon="📅",
                 color="gray_background",
             )
 
             audio = res.children.add_new(AudioBlock)
-            info = audio.upload_file(fname)
+            info = audio.upload_file(file.name())
             logging.debug("Audio uploaded: %s", info)
 
-            for block in medialib.split_large_text(data["text"], MAX_TEXT_SIZE):
+            for block in medialib.split_large_text(file.get_field("text"), MAX_TEXT_SIZE):
                 res.children.add_new(TextBlock, title=block)
 
             res.set("format.block_locked", True)
 
-            self.__add_existing_page(data["source"], data["processtime"], res.id)
+            self.__add_existing_page(
+                file.get_field("source"), file.get_field("processtime"), res.id
+            )
         except Exception:
-            logging.warning("Delete uncompleate page for: %s", fname)
+            logging.warning("Delete uncompleate page for: %s", file)
             self.__delete_page(None, bid)
             raise
 
         self.__status["created"] += 1
 
-    def __create_video_page(self, data):
+    def __create_video_page(self, file):
+        if file.state() != "uploaded":
+            logging.debug("file not uploaded to YouTube yet: %s", file)
+            return
+
         if self.__dry_run:
             self.__status["created"] += 1
             return
 
-        date = medialib.get_date_from_timestring(data["recordtime"])
-        url = data["url"]
+        date = file.recorddate()
+        url = file.get_field("url")
 
         bid = self.__add_row(
             self.__video_db_id,
             title=date,
             date=date,
-            source=data["source"],
-            processtime=data["processtime"],
+            source=file.get_field("source"),
+            processtime=file.get_field("processtime"),
             icon="📹",
         )
         try:
@@ -338,7 +339,7 @@ class NotionUploader:
 
             blocks = []
             pos = 0.0
-            for video in data["videos"]:
+            for video in file.get_field("videos"):
                 text = video["text"]
                 if text != "":
                     blocks += self.__gen_video_description_blocks(
@@ -357,7 +358,9 @@ class NotionUploader:
 
             res.set("format.block_locked", True)
 
-            self.__add_existing_page(data["source"], data["processtime"], res.id)
+            self.__add_existing_page(
+                file.get_field("source"), file.get_field("processtime"), res.id
+            )
         except Exception:
             logging.warning("Delete uncompleate page for: %s", date)
             self.__delete_page(None, bid)
@@ -365,26 +368,18 @@ class NotionUploader:
 
         self.__status["created"] += 1
 
-    def __check_json(self, data):
-        for f in ("recordtime", "processtime", "source"):
-            if len(data[f].strip()) == 0:
-                raise UserWarning(f"Incorrect file: empty {f}")
-
     def process(self, file):
         logging.info("Process file: %s", file)
         self.__status["processed"] += 1
 
-        data = file.load_json()
-        self.__check_json(data)
-
-        if self.__check_existing(data, True):
+        if self.__check_existing(file, True):
             return
 
-        tp = data.get("type")
+        tp = file.type()
         if tp == "audio":
-            self.__create_audio_page(data, file.name())
+            self.__create_audio_page(file)
         elif tp == "mergedvideo":
-            self.__create_video_page(data)
+            self.__create_video_page(file)
         else:
             raise UserWarning("Unknown json type: {tp}")
 
@@ -438,14 +433,12 @@ def main():
 
     audio_db_id = os.getenv("NOTION_AUDIO_DB_ID")
     video_db_id = os.getenv("NOTION_VIDEO_DB_ID")
-    cache_db_file = os.getenv("NOTION_CACHE_DB_FILE")
 
     nup = NotionUploader(
         token=token,
         api_key=api_key,
         audio_db_id=audio_db_id,
         video_db_id=video_db_id,
-        cache_db_file=cache_db_file,
         force_update=args.force,
         dry_run=args.dryrun,
     )

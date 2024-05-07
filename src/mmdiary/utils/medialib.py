@@ -92,8 +92,11 @@ class MediaFile:
     def state(self):
         return self.json().get("state")
 
-    def get_filed(self, filedname):
+    def get_field(self, filedname):
         return self.json()[filedname]
+
+    def have_field(self, filedname):
+        return filedname in self.json()
 
     def update_fields(self, fields):
         if self.have_json():
@@ -149,15 +152,17 @@ class MediaLib:
         ]
 
     def get_processed(self, should_have_file=True):
-        return list(
-            filter(
-                lambda mf: mf.have_json() and (not should_have_file or mf.have_file()),
-                self.get_all(),
+        return sorted(
+            list(
+                filter(
+                    lambda mf: mf.have_json() and (not should_have_file or mf.have_file()),
+                    self.get_all(),
+                )
             )
         )
 
     def get_new(self):
-        return list(filter(lambda mf: not mf.have_json(), self.get_all()))
+        return sorted(list(filter(lambda mf: not mf.have_json(), self.get_all())))
 
 
 def split_large_text(text, max_block_size):

@@ -3,80 +3,50 @@
 import argparse
 import atexit
 import os
-import sqlite3
-import threading
+import pickle
 
 from notion_client import Client
 from notion_client.helpers import iterate_paginated_api
 
-SCHEMA = '''
-CREATE TABLE IF NOT EXISTS existing_pages (
-    "filename" TEXT,
-    "processtime" TEXT,
-    "bid" TEXT
-);
 
-CREATE UNIQUE INDEX IF NOT EXISTS existing_pages_filename ON existing_pages (filename);
-'''
+class Cache:
+    def __init__(self):
+        self.__filename = os.path.expanduser(os.getenv("MMDIARY_NOTION_CACHE"))
+        self.__data = {}
+        self.__load()
+        self.__changed = False
+        atexit.register(self.__save)
 
+    def __load(self):
+        if not os.path.exists(self.__filename):
+            self.__data = {}
+            return
+        with open(self.__filename, "rb") as f:
+            self.__data = pickle.load(f)
 
-class CacheDB:
-    def __init__(self, filename):
-        self.__conn = sqlite3.connect(os.path.expanduser(filename), check_same_thread=False)
-
-        self.__conn.executescript(SCHEMA)
-        self.__lock = threading.RLock()
-        atexit.register(self.commit)
-
-    def __del__(self):
-        self.commit()
-
-    def commit(self):
-        with self.__lock:
-            self.__conn.commit()
-
-    def rollback(self):
-        with self.__lock:
-            self.__conn.rollback()
+    def __save(self):
+        if not self.__changed:
+            return
+        with open(self.__filename, "wb") as f:
+            pickle.dump(self.__data, f)
 
     def list_existing_pages(self):
-        with self.__lock:
-            self.commit()
-            c = self.__conn.cursor()
-            res = c.execute('SELECT filename, bid FROM existing_pages')
-            return res.fetchall()
+        return [(filename, bid) for filename, (processtime, bid) in self.__data.items()]
 
     def clean_existing_pages(self):
-        with self.__lock:
-            self.commit()
-            c = self.__conn.cursor()
-            c.execute('DELETE FROM existing_pages')
-            self.commit()
+        self.__data = {}
+        self.__changed = True
 
     def add_existing_page(self, filename, processtime, bid):
-        with self.__lock:
-            c = self.__conn.cursor()
-            c.execute(
-                'INSERT OR REPLACE \
-                 INTO existing_pages (filename, processtime, bid) \
-                 VALUES (?, ?, ?)',
-                (filename, processtime, bid),
-            )
+        self.__data[filename] = (processtime, bid)
+        self.__changed = True
 
     def check_existing_pages(self, filename):
-        with self.__lock:
-            c = self.__conn.cursor()
-            res = c.execute(
-                'SELECT processtime, bid FROM existing_pages\
-                             WHERE filename=?',
-                (filename,),
-            )
-            return res.fetchone()
+        return self.__data.get(filename)
 
     def remove_from_existing_pages(self, filename):
-        with self.__lock:
-            c = self.__conn.cursor()
-            c.execute('DELETE FROM existing_pages WHERE filename=?', (filename,))
+        if filename in self.__data:
+            del self.__data[filename]
 
     def __get_prop(self, row, name, default=""):
         try:
@@ -127,19 +97,13 @@ def args_parse():
             'sync',
         ],
     )
-    parser.add_argument(
-        '-d',
-        '--database',
-        help='Database file',
-        default=os.getenv("NOTION_CACHE_DB_FILE"),
-    )
     parser.add_argument('-f', '--file', help='File name')
     return parser.parse_args()
 
 
 def main():
     args = args_parse()
-    db = CacheDB(args.database)
+    db = Cache()
 
     if args.action == 'clean':
         db.clean_existing_pages()
