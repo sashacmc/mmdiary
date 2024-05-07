@@ -1,11 +1,12 @@
 #!/usr/bin/python3
 
-import json
 import logging
 import os
 
 from photo_importer import config as pi_config
 from photo_importer import fileprop
+
+from mmdiary.utils import jsoncache
 
 TIME_OUT_FORMAT = "%Y-%m-%d %H:%M:%S"
 
@@ -15,6 +16,7 @@ MP4_EXT = ".mp4"
 NO_SCAN_MARKER = ".mmdiaryskip"
 
 g_fileprop = fileprop.FileProp(pi_config.Config())
+g_cache = jsoncache.JsonCache()
 
 
 class MediaFile:
@@ -52,12 +54,10 @@ class MediaFile:
         if not self.have_json():
             return None
 
-        with open(self.json_name(), "r", encoding="utf-8") as f:
-            return json.load(f)
+        return g_cache.get(self.json_name())
 
     def save_json(self, cont):
-        with open(self.json_name(), "w", encoding="utf-8") as f:
-            json.dump(cont, f, ensure_ascii=False, indent=2)
+        g_cache.set(cont, self.json_name())
         self.__json = cont
         self.__have_json = True
 

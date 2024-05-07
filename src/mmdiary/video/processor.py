@@ -55,7 +55,7 @@ class VideoProcessor:
 
         videos_info = []
         for mf, info in zip(mfiles, fileinfos):
-            mf_info = mf.load_json()
+            mf_info = mf.json()
             info["caption"] = mf_info["caption"].strip()
             info["text"] = mf_info["text"].strip()
             info["timestamp"] = mf.prop().time().strftime(TIME_OUT_FORMAT)
