@@ -4,7 +4,6 @@
 import argparse
 import logging
 import os
-import random
 from datetime import datetime
 
 import mixvideoconcat
@@ -94,7 +93,6 @@ class VideoProcessor:
             toprocess = list(self.__lib.get_converted()) + list(self.__lib.get_uploaded())
         else:
             toprocess = list(self.__lib.get_nonprocessed())
-            random.shuffle(toprocess)  # TODO: REMOVE !!!
 
         pbar = progressbar.start("Process", len(toprocess))
         for date in toprocess:

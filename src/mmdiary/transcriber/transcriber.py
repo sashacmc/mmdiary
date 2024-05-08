@@ -16,20 +16,25 @@ from mmdiary.transcriber.verifier import check_text
 DESCRIPTION = """
 Transcribes audio/video file(s).
 Result will be saved to json file along with the original file.
+Optional environment variables:
+    MMDIARY_TRANSCRIBE_MODEL - Transcribe model (default: "medium")
+        See details: https://github.com/openai/whisper?tab=readme-ov-file#available-models-and-languages
+    MMDIARY_TRANSCRIBE_LANGUAGE - Transcribe language (default: "ru")
 """
 
 
 class Transcriber:
-    def __init__(self, model):
+    def __init__(self, model, language):
         import whisper
 
         logging.info("Transcriber initialization...")
         self.__model = whisper.load_model(model)
         self.__modelname = "whisper/" + model
+        self.__language = language
         logging.info("Transcriber inited")
 
     def __transcribe(self, file):
-        return self.__model.transcribe(file.name(), language="ru")
+        return self.__model.transcribe(file.name(), language=self.__language)
 
     def __extract_caption(self, text):
         res = ""
@@ -67,7 +72,7 @@ class Transcriber:
 
         res = self.__transcribe(file)
         text = self.__to_text(res)
-        text = check_text(text)
+        text = check_text(text, self.__language)
 
         cont = {
             "caption": self.__extract_caption(text),
@@ -110,7 +115,10 @@ def main():
         return
 
     print("Model loading... ", end='', flush=True)
-    tr = Transcriber("medium")
+    tr = Transcriber(
+        os.getenv("MMDIARY_TRANSCRIBE_MODEL", "medium"),
+        os.getenv("MMDIARY_TRANSCRIBE_LANGUAGE", "ru"),
+    )
     print("done")
 
     pbar = progressbar.start("Transcribe", len(fileslist))

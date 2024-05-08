@@ -1,4 +1,5 @@
 import os
+import copy
 import pickle
 import json
 import atexit
@@ -42,13 +43,13 @@ class JsonCache:
             try:
                 time, cont = self.__data[filename]
                 if file_stat.st_mtime == time:
-                    return cont
+                    return copy.deepcopy(cont)
             except KeyError:
                 pass
             cont = self.__load_json(filename)
             self.__data[filename] = (file_stat.st_mtime, cont)
             self.__changed = True
-            return cont
+            return copy.deepcopy(cont)
         except FileNotFoundError:
             if filename in self.__data:
                 del self.__data[filename]

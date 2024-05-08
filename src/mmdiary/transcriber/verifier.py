@@ -1,8 +1,10 @@
 #!/usr/bin/python3
+# pylint: disable=too-many-instance-attributes
 
 import argparse
 import logging
 import os
+import re
 from datetime import datetime
 
 from notion.client import NotionClient
@@ -19,62 +21,59 @@ If sync option specified the script will addionally check sync with notion:
     notion - check notion cache and remove missed local files 
     all - include `local` and `notion`
 
+Optional environment variables:
+    MMDIARY_TRANSCRIBE_LANGUAGE - Transcribe language (default: "ru")
+
 Sync check require following environment variables:
     NOTION_TOKEN - Notion web auth token
-    NOTION_CACHE_DB_FILE - Cachedb file
+    MMDIARY_NOTION_CACHE_FILE - Cache file
 """
 
-HALLUCINATION_TEXTS = [
-    "Игорь Негода",
-    "Валерий Курас",
-    "Редактор субтитров",
-    "Реактор субтитров",
-    "Субтитры субтитров",
-    "Спасибо за субтитры",
-    "Субтитры подготовлены",
-    "Субтитры делал",
-    "Субтитры сделаны",
-    "Благодарю за внимание",
-    "Спасибо за внимание",
-    "Фондю любит тебя",
-    "одпишись на канал",
-    "одпишитесь на канал",
-    "одпишитесь на наш канал",
-    "одписывайтесь на канал",
-    "одписывайтесь на наш канал",
-    "одписывайтесь на мой канал",
-    "одписывайтесь на этот канал",
-    "обро пожаловать в наш канал",
-    "обро пожаловать на наш канал",
-    "обро пожаловать на мой канал",
-    "обро пожаловать на канал",
-    "тавьте лайк",
-    "тавь лайк",
-    "Найдите лайки",
-    "Спасибо за просмотр",
-    "Большое спасибо за просмотр",
-    "Благодарю за просмотр",
-    "И не забудьте поставить лайк",
-    "ФактФронт",
-    "ПОДПИСЫВАЕТСЯ",
-    "ПРОДОЛЖЕНИЕ",
-    "Продолжение в следующей части",
-]
+HALLUCINATION_TEXTS = {
+    "ru": [
+        re.compile("Игорь Негода"),
+        re.compile("Валерий Курас"),
+        re.compile("Фондю любит тебя"),
+        re.compile("ФактФронт"),
+        re.compile("не пропустить новые видео"),
+        re.compile("[Пп]родолжение в следующей части"),
+        re.compile("[Рр]е(д)?актор субтитров"),
+        re.compile("Субтитры субтитров"),
+        re.compile("Спасибо за субтитры"),
+        re.compile("[Сс]убтитры (подготов|делал|сделаны)"),
+        re.compile("[Бб]лагодарю( (тебя|вас|всех))? за (внимание|просмотр)"),
+        re.compile("[Сс]пасибо( (тебе|вам|всем))? за (внимание|просмотр)"),
+        re.compile("[Пп](одписаться|одписывайся|одписывайтесь) на( (мой|наш|этот))? канал"),
+        re.compile("[Пп](одпишись|одпишитесь|одпишите) на( (мой|наш|этот))? канал"),
+        re.compile("[Дд]обро пожаловать (на|в)( (мой|наш|этот))? канал"),
+        re.compile("[Сс]тавь(те)? лайк(и)?"),
+        re.compile("[Жж]ми(те)? лайк(и)?"),
+        re.compile("[Пп]остав(ь|те|ить) лайк(и)?"),
+        re.compile("[Дд](л)?ай(те)? лайк(и)?"),
+        re.compile("Найдите лайки"),
+        # exclude all capitalised except some key words
+        re.compile(r"^(?!.*(?:МУЗЫКА|СМЕХ|КАШЕЛЬ|ПЕСНЯ|ПОЮТ|ПОЕТ|КРИК))[А-Я\s]{4,}$"),
+    ]
+}
 
 RES_OK = 0
 RES_TO_UPDATE = 1
 RES_TO_DELETE = 2
 
 
-def has_hall_text(s):
-    for hall_text in HALLUCINATION_TEXTS:
-        if hall_text in s:
+def has_hall_text(s, language):
+    if language not in HALLUCINATION_TEXTS:
+        return False
+    for hall_text in HALLUCINATION_TEXTS[language]:
+        if hall_text.search(s) is not None:
             logging.debug("Has hall_text: %s", s)
             return True
     return False
 
 
-def clean_wrong_symbols(s):
+def clean_wrong_symbols(s, language):
+    if language != "ru":
+        return s
     res = ''
     for ch in s:
         if (
@@ -100,15 +99,15 @@ def clean_wrong_symbols(s):
     return res
 
 
-def check_text(text):
+def check_text(text, language):
     if text == "":
         return text
 
     src = text.split("\n")
     res = []
     for t in src:
-        if not has_hall_text(t):
-            s = clean_wrong_symbols(t)
+        if not has_hall_text(t, language):
+            s = clean_wrong_symbols(t, language)
             if s == "":
                 logging.debug("Has empty string (was '%s')", t)
             else:
@@ -124,6 +123,7 @@ class Verifier:
         self.__sync_notion = sync in ('all', 'notion')
         self.__cache = cache.Cache()
         self.__notion = NotionClient(token_v2=os.getenv("NOTION_TOKEN"))
+        self.__language = os.getenv("MMDIARY_TRANSCRIBE_LANGUAGE", "ru")
 
         self.__local_sources = {}
 
@@ -136,12 +136,12 @@ class Verifier:
 
     def __check_update_data(self, data):
         res = False
-        new_caption = check_text(data["caption"])
+        new_caption = check_text(data["caption"], self.__language)
         if new_caption != data["caption"]:
             res = True
             data["caption"] = new_caption
 
-        new_text = check_text(data["text"])
+        new_text = check_text(data["text"], self.__language)
         if new_text != data["text"]:
             res = True
             data["text"] = new_text
