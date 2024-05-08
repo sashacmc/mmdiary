@@ -13,7 +13,7 @@ from mmdiary.utils.medialib import TIME_OUT_FORMAT
 
 
 DESCRIPTION = """
-Concatente siary videos and generate aggregated JSON file
+Concatente diary videos and generate aggregated JSON file
 Please declare enviromnent variables before use:
     VIDEO_LIB_ROOTS - List of video library root dirs
     VIDEO_PROCESSOR_WORK_DIR - Work dir for temp files (can be huge!) 
@@ -22,9 +22,11 @@ Please declare enviromnent variables before use:
 
 
 class VideoProcessor:
-    def __init__(self, update_existing, json_only):
+    def __init__(self, update_existing, json_only, force, dry_run):
         self.__update_existing = update_existing
         self.__json_only = json_only
+        self.__force = force
+        self.__dry_run = dry_run
         self.__work_dir = os.getenv("VIDEO_PROCESSOR_WORK_DIR")
         if not self.__work_dir:
             raise UserWarning("VIDEO_PROCESSOR_WORK_DIR not defined")
@@ -36,6 +38,26 @@ class VideoProcessor:
 
         self.__lib = datelib.DateLib()
 
+    def __check_info_changed(self, mfiles, res_mf):
+        if not res_mf.have_field("videos"):
+            return len(mfiles) != 0
+
+        videos = {info["name"]: info for info in res_mf.get_field("videos")}
+        if len(videos) != len(mfiles):
+            return True
+
+        for mf in mfiles:
+            if mf.name() not in videos:
+                return True
+            info = videos[mf.name()]
+            if (
+                info["caption"] != mf.get_field("caption").strip()
+                or info["text"] != mf.get_field("text").strip()
+                or info["timestamp"] != mf.get_field("recordtime")
+            ):
+                return True
+        return False
+
     def __process_date(self, date):
         logging.info("Start: %s", date)
         res_mf = self.__lib.results()[date]
@@ -44,12 +66,16 @@ class VideoProcessor:
         fnames = [mf.name() for mf in mfiles]
         logging.info("found %i files", len(fnames))
 
+        if not self.__force and not self.__check_info_changed(mfiles, res_mf):
+            logging.debug("Date: %s not chnaged, skip", date)
+            return
+
         if os.path.exists(res_mf.name()) and not self.__json_only:
             logging.debug("Remove existing result: %s", res_mf.name())
             os.unlink(res_mf.name())
 
         fileinfos = mixvideoconcat.concat(
-            fnames, res_mf.name(), self.__work_dir, dry_run=self.__json_only
+            fnames, res_mf.name(), self.__work_dir, dry_run=(self.__json_only or self.__dry_run)
         )
 
         videos_info = []
@@ -57,7 +83,7 @@ class VideoProcessor:
             mf_info = mf.json()
             info["caption"] = mf_info["caption"].strip()
             info["text"] = mf_info["text"].strip()
-            info["timestamp"] = mf.prop().time().strftime(TIME_OUT_FORMAT)
+            info["timestamp"] = mf_info["recordtime"]
             videos_info.append(info)
 
         processduration = (datetime.now() - starttime).total_seconds()
@@ -70,7 +96,10 @@ class VideoProcessor:
             "recordtime": date,
             "type": "mergedvideo",
         }
-        self.__lib.set_converted(date, fields)
+        if not self.__dry_run:
+            self.__lib.set_converted(date, fields)
+        else:
+            logging.debug("dry_run result: %s", fields)
 
         logging.info("Done: %s: %s", date, res_mf.json_name())
 
@@ -89,7 +118,7 @@ class VideoProcessor:
 
     def process_all(self):
         toprocess = []
-        if self.__json_only:
+        if self.__update_existing:
             toprocess = list(self.__lib.get_converted()) + list(self.__lib.get_uploaded())
         else:
             toprocess = list(self.__lib.get_nonprocessed())
@@ -112,10 +141,16 @@ def __args_parse():
         "dates", nargs="*", help="Date to process (otherwise all dates will be processed)"
     )
     parser.add_argument('-l', '--logfile', help='Log file', default=None)
-    parser.add_argument('-u', '--update', help='Update existing', action='store_true')
+    parser.add_argument(
+        '-u', '--update', help='Update already processed, if changed', action='store_true'
+    )
+    parser.add_argument('-f', '--force', help='Force update already processed', action='store_true')
+    parser.add_argument(
+        '-d', '--dry-run', help='Only analize, without real changes', action='store_true'
+    )
     parser.add_argument(
         '--json-only',
-        help='Only regenerate existing JSONs without video files regeneration',
+        help='Only generate JSONs without video files generation',
         action='store_true',
     )
     return parser.parse_args()
@@ -126,7 +161,7 @@ def main():
     log.init_logger(args.logfile, logging.DEBUG)
     logging.getLogger("py.warnings").setLevel(logging.ERROR)
 
-    vp = VideoProcessor(args.update, args.json_only)
+    vp = VideoProcessor(args.update, args.json_only, args.force, args.dry_run)
 
     if len(args.dates) == 0:
         vp.process_all()

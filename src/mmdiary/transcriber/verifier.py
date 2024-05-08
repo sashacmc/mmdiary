@@ -51,6 +51,7 @@ HALLUCINATION_TEXTS = {
         re.compile("[Пп]остав(ь|те|ить) лайк(и)?"),
         re.compile("[Дд](л)?ай(те)? лайк(и)?"),
         re.compile("Найдите лайки"),
+        re.compile("Я не могу это сделать"),
         # exclude all capitalised except some key words
         re.compile(r"^(?!.*(?:МУЗЫКА|СМЕХ|КАШЕЛЬ|ПЕСНЯ|ПОЮТ|ПОЕТ|КРИК))[А-Я\s]{4,}$"),
     ]

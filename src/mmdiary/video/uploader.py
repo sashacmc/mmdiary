@@ -157,6 +157,8 @@ class VideoUploader:
             raise
 
     def add_comment(self, video_id, comment_text):
+        if comment_text == "":
+            return
         request = self.__youtube.commentThreads().insert(
             part="snippet",
             body={
