@@ -41,6 +41,7 @@ classifiers = [
 ]
 
 dependencies = [
+	"pytest",
 	"notion_client",
 	"notion",
 	"progressbar2",
