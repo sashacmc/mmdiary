@@ -102,7 +102,8 @@ def generate_description(time_labels):
 
 
 class VideoUploader:
-    def __init__(self):
+    def __init__(self, update):
+        self.__update = update
         self.__res_dir = os.getenv("VIDEO_PROCESSOR_RES_DIR")
         os.makedirs(self.__res_dir, exist_ok=True)
 
@@ -156,6 +157,48 @@ class VideoUploader:
 
             raise
 
+    def update_video(self, video_id, title, time_labels):
+        logging.debug("Update video: %s", video_id)
+        request = self.__youtube.videos().update(
+            part="snippet",
+            body={
+                "snippet": {
+                    "id": video_id,
+                    "title": title,
+                    "description": generate_description(time_labels),
+                    "tags": ["daily"],
+                    "categoryId": "22",
+                },
+            },
+        )
+        request.execute()
+
+    def __list_comments(self, video_id):
+        try:
+            request = self.__youtube.commentThreads().list(
+                part="snippet", videoId=video_id, maxResults=100
+            )
+
+            comment_ids = []
+            while request:
+                response = request.execute()
+                for item in response["items"]:
+                    comment_ids.append(item["id"])
+                request = self.__youtube.commentThreads().list_next(request, response)
+
+            return comment_ids
+        except googleapiclient.errors.HttpError as ex:
+            if ex.status_code == 403 and ex.error_details[0]["reason"] == "commentsDisabled":
+                logging.debug("commentsDisabled")
+                return []
+            raise
+
+    def delete_comments(self, video_id):
+        comment_ids = self.__list_comments(video_id)
+        logging.debug("Remove comments for fideo %s: %s", video_id, comment_ids)
+        for comment_id in comment_ids:
+            self.__youtube.comments().delete(id=comment_id).execute()
+
     def add_comment(self, video_id, comment_text):
         if comment_text == "":
             return
@@ -180,26 +223,36 @@ class VideoUploader:
     def process_date(self, date):
         mf = self.__lib.results()[date]
         data = mf.json()
-        logging.info("Upload: %s", date)
+        logging.info("Process: %s", date)
 
-        if not mf.have_file():
-            raise FileNotFoundError("Source video file not exists")
         if not mf.have_json():
             raise FileNotFoundError("Json file not exists")
 
-        if "url" in data:
-            try:
-                self.delete_video(extract_video_id(data["url"]))
-            except Exception:
-                logging.exception("Video deletion failed")
+        update = self.__update or not mf.have_file()
+        if update:
+            logging.debug("Update only")
 
         time_labels = self.__gen_time_labels(data, "caption")
         comments_text = self.__gen_comments(data)
         logging.debug(comments_text)
 
-        video_id = self.upload_video(mf.name(), date, time_labels)
-        if video_id is None:
-            return False
+        video_id = None
+        if update:
+            if "url" not in data:
+                raise UserWarning("URL file missed, update impossible")
+            video_id = extract_video_id(data["url"])
+            self.update_video(video_id, date, time_labels)
+            self.delete_comments(video_id)
+        else:
+            if "url" in data:
+                try:
+                    self.delete_video(extract_video_id(data["url"]))
+                except Exception:
+                    logging.exception("Video deletion failed")
+
+            video_id = self.upload_video(mf.name(), date, time_labels)
+            if video_id is None:
+                return False
 
         for comment_text in comments_text:
             try:
@@ -233,7 +286,13 @@ class VideoUploader:
 def __args_parse():
     parser = argparse.ArgumentParser()
     parser.add_argument("dates", nargs="*", help="Date to process")
-    parser.add_argument('-l', '--logfile', help='Log file', default=None)
+    parser.add_argument("-l", "--logfile", help="Log file", default=None)
+    parser.add_argument(
+        "-u",
+        "--update",
+        help="Update video description/comment without reupload",
+        action='store_true',
+    )
     return parser.parse_args()
 
 
@@ -242,7 +301,7 @@ def main():
     log.init_logger(args.logfile, logging.DEBUG)
     logging.getLogger("py.warnings").setLevel(logging.ERROR)
 
-    vup = VideoUploader()
+    vup = VideoUploader(args.update)
 
     res_count = 0
     err_count = 0

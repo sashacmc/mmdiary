@@ -140,18 +140,18 @@ def __args_parse():
     parser.add_argument(
         "dates", nargs="*", help="Date to process (otherwise all dates will be processed)"
     )
-    parser.add_argument('-l', '--logfile', help='Log file', default=None)
+    parser.add_argument("-l", "--logfile", help="Log file", default=None)
     parser.add_argument(
-        '-u', '--update', help='Update already processed, if changed', action='store_true'
+        "-u", "--update", help="Update already processed, if changed", action="store_true"
     )
-    parser.add_argument('-f', '--force', help='Force update already processed', action='store_true')
+    parser.add_argument("-f", "--force", help="Force update already processed", action="store_true")
     parser.add_argument(
-        '-d', '--dry-run', help='Only analize, without real changes', action='store_true'
+        "-d", "--dry-run", help="Only analize, without real changes", action="store_true"
     )
     parser.add_argument(
-        '--json-only',
-        help='Only generate JSONs without video files generation',
-        action='store_true',
+        "--json-only",
+        help="Only generate JSONs without video files generation",
+        action="store_true",
     )
     return parser.parse_args()
 
