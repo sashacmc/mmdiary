@@ -98,7 +98,7 @@ class DateLib:
     def get_nonprocessed(self):
         all_dates = set(self.sources().keys())
         processed_dates = set(self.__get_results_dates_by_state(STATE_NONE))
-        return all_dates - processed_dates
+        return sorted(list(all_dates - processed_dates))
 
     def __get_results_dates_by_state(self, state):
         res = []
@@ -187,12 +187,13 @@ def __args_parse():
         choices=[
             "list_dates",
             "list_disabled_videos",
+            "list_files",
             "disable_video",
             "set_reupload",
         ],
     )
     parser.add_argument("-f", "--file", help="File name (for disable_video)")
-    parser.add_argument("-e", "--date", help="Date (for set_reupload)")
+    parser.add_argument("-e", "--date", help="Date (for set_reupload, list_files)")
     parser.add_argument("-s", "--state", help="State for (list_dates)")
     return parser.parse_args()
 
@@ -208,6 +209,9 @@ def main():
     elif args.action == "list_disabled_videos":
         for filename in lib.list_disabled_videos():
             print(filename)
+    elif args.action == "list_files":
+        for mf in lib.get_files_by_date(args.date):
+            print(mf)
     elif args.action == "disable_video":
         lib.disable_video(args.file)
     elif args.action == "set_reupload":
