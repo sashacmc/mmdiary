@@ -162,8 +162,8 @@ class VideoUploader:
         request = self.__youtube.videos().update(
             part="snippet",
             body={
+                "id": video_id,
                 "snippet": {
-                    "id": video_id,
                     "title": title,
                     "description": generate_description(time_labels),
                     "tags": ["daily"],
