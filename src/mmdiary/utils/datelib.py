@@ -27,6 +27,15 @@ STATE_INPROCESS = "inprocess"
 STATE_CONVERTED = "converted"
 STATE_UPLOADED = "uploaded"
 
+VALID_STATES = set(
+    [
+        STATE_NONE,
+        STATE_INPROCESS,
+        STATE_CONVERTED,
+        STATE_UPLOADED,
+    ]
+)
+
 
 class DateLib:
     def __init__(self):
@@ -88,7 +97,8 @@ class DateLib:
 
     def set_converted(self, date, fields):
         new_fields = {}
-        new_fields.update(fields)
+        if fields is not None:
+            new_fields.update(fields)
         new_fields["state"] = STATE_CONVERTED
         self.results()[date].update_fields(new_fields)
 
@@ -101,6 +111,8 @@ class DateLib:
         return sorted(list(all_dates - processed_dates))
 
     def __get_results_dates_by_state(self, state):
+        if state not in VALID_STATES:
+            raise UserWarning(f"Incorrect state: {state}")
         res = []
         for date, mf in self.results().items():
             if mf.state() == state:
@@ -204,21 +216,28 @@ def main():
     lib = DateLib()
 
     if args.action == "list_dates":
-        for date, state in lib.list_dates(args.state):
+        dates = lib.list_dates(args.state)
+        for date, state in dates:
             print(date, state)
+        print("Total:", len(dates))
     elif args.action == "list_disabled_videos":
-        for filename in lib.list_disabled_videos():
+        filenames = lib.list_disabled_videos()
+        for filename in filenames:
             print(filename)
+        print("Total:", len(filenames))
     elif args.action == "list_files":
-        for mf in lib.get_files_by_date(args.date):
+        mfs = lib.get_files_by_date(args.date)
+        for mf in mfs:
             print(mf)
+        print("Total:", len(mfs))
     elif args.action == "disable_video":
         lib.disable_video(args.file)
+        logging.info("Done.")
     elif args.action == "set_reupload":
         if lib.get_state(args.date) != STATE_UPLOADED:
             logging.warning("Specified date not yet uploaded: %s", args.date)
         lib.set_converted(args.date, {})
-    logging.info("Done.")
+        logging.info("Done.")
 
 
 if __name__ == "__main__":

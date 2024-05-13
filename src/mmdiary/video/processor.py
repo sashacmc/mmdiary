@@ -68,7 +68,7 @@ class VideoProcessor:
 
         if not self.__force and not self.__check_info_changed(mfiles, res_mf):
             logging.debug("Date: %s not chnaged, skip", date)
-            return
+            return None
 
         if os.path.exists(res_mf.name()) and not self.__json_only:
             logging.debug("Remove existing result: %s", res_mf.name())
@@ -96,12 +96,8 @@ class VideoProcessor:
             "recordtime": date,
             "type": "mergedvideo",
         }
-        if not self.__dry_run:
-            self.__lib.set_converted(date, fields)
-        else:
-            logging.debug("dry_run result: %s", fields)
-
         logging.info("Done: %s: %s", date, res_mf.json_name())
+        return fields
 
     def process_date(self, date):
         if not self.__update_existing and not self.__json_only:
@@ -109,12 +105,17 @@ class VideoProcessor:
                 logging.warning("date: %s already processed, skip", date)
                 return
 
-        self.__lib.set_in_progress(date)
-        try:
-            self.__process_date(date)
-        except (Exception, KeyboardInterrupt):
-            self.__lib.set_not_processed(date)
-            raise
+        if not self.__dry_run:
+            self.__lib.set_in_progress(date)
+            try:
+                fields = self.__process_date(date)
+                self.__lib.set_converted(date, fields)
+            except:
+                self.__lib.set_not_processed(date)
+                raise
+        else:
+            fields = self.__process_date(date)
+            logging.debug("dry_run result: %s", fields)
 
     def process_all(self):
         toprocess = []

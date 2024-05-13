@@ -33,6 +33,7 @@ HALLUCINATION_TEXTS = {
     "ru": [
         re.compile("Игорь Негода"),
         re.compile("Валерий Курас"),
+        re.compile("Валерий Савинский"),
         re.compile("Фондю любит тебя"),
         re.compile("ФактФронт"),
         re.compile("не пропустить новые видео"),
