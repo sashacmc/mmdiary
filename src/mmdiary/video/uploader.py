@@ -11,6 +11,17 @@ import googleapiclient.discovery
 from mmdiary.utils import log, datelib, progressbar
 from mmdiary.utils.medialib import TIME_OUT_FORMAT, split_large_text
 
+DESCRIPTION = """
+Uploads generated diary videos to YouTube
+Please declare enviromnent variables before use:
+    MMDIARY_YOUTUBE_CLIENT_SECRETS - Path/filename to the client_secrets.json file for YouTube API
+        Can be found/created there: https://console.cloud.google.com/apis/credentials
+    MMDIARY_YOUTUBE_TOKEN - Path/filename to the cached YouTube token
+        Path must exists, file will be created after the first authorization
+    VIDEO_LIB_ROOTS - List of video library root dirs
+    VIDEO_PROCESSOR_RES_DIR - Result dir
+"""
+
 YOUTUBE_MAX_DESCRIPTION = 5000
 YOUTUBE_MAX_COMMENT = 5000
 YOUTUBE_URL = "https://www.youtube.com/watch?v="
@@ -104,11 +115,12 @@ def generate_description(time_labels):
 class VideoUploader:
     def __init__(self, update):
         self.__update = update
-        self.__res_dir = os.getenv("VIDEO_PROCESSOR_RES_DIR")
-        os.makedirs(self.__res_dir, exist_ok=True)
 
         self.__lib = datelib.DateLib()
-        self.__credentials = get_youtube_credentials("client_secrets.json", "token.json")
+        self.__credentials = get_youtube_credentials(
+            os.path.expanduser(os.getenv("MMDIARY_YOUTUBE_CLIENT_SECRETS", "client_secrets.json")),
+            os.path.expanduser(os.getenv("MMDIARY_YOUTUBE_TOKEN", "token.json")),
+        )
         self.__youtube = googleapiclient.discovery.build(
             "youtube", "v3", credentials=self.__credentials
         )
@@ -284,7 +296,9 @@ class VideoUploader:
 
 
 def __args_parse():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description=DESCRIPTION, formatter_class=argparse.RawTextHelpFormatter
+    )
     parser.add_argument("dates", nargs="*", help="Date to process")
     parser.add_argument("-l", "--logfile", help="Log file", default=None)
     parser.add_argument(
