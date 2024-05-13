@@ -107,24 +107,25 @@ class DateLib:
 
     def get_nonprocessed(self):
         all_dates = set(self.sources().keys())
-        processed_dates = set(self.__get_results_dates_by_state(STATE_NONE))
+        processed_dates = set(self.__get_results_dates_by_state(VALID_STATES - set([STATE_NONE])))
         return sorted(list(all_dates - processed_dates))
 
-    def __get_results_dates_by_state(self, state):
-        if state not in VALID_STATES:
-            raise UserWarning(f"Incorrect state: {state}")
+    def __get_results_dates_by_state(self, states):
+        for state in states:
+            if state not in VALID_STATES:
+                raise UserWarning(f"Incorrect state: {state}")
         res = []
         for date, mf in self.results().items():
-            if mf.state() == state:
+            if mf.state() in states:
                 res.append(date)
         res.sort()
         return res
 
     def get_converted(self):
-        return self.__get_results_dates_by_state(STATE_CONVERTED)
+        return self.__get_results_dates_by_state([STATE_CONVERTED])
 
     def get_uploaded(self):
-        return self.__get_results_dates_by_state(STATE_UPLOADED)
+        return self.__get_results_dates_by_state([STATE_INPROCESS])
 
     def get_files_by_date(self, date, for_upload=False):
         mfs = self.sources()[date]
