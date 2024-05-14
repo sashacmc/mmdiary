@@ -105,6 +105,11 @@ class DateLib:
     def set_uploaded(self, date, url):
         self.results()[date].update_fields({"state": STATE_UPLOADED, "url": url})
 
+    def set_state(self, date, state):
+        if state not in VALID_STATES:
+            raise UserWarning(f"Incorrect state: {state}")
+        self.results()[date].update_fields({"state": state})
+
     def get_nonprocessed(self):
         all_dates = set(self.sources().keys())
         processed_dates = set(self.__get_results_dates_by_state(VALID_STATES - set([STATE_NONE])))
@@ -125,7 +130,7 @@ class DateLib:
         return self.__get_results_dates_by_state([STATE_CONVERTED])
 
     def get_uploaded(self):
-        return self.__get_results_dates_by_state([STATE_INPROCESS])
+        return self.__get_results_dates_by_state([STATE_UPLOADED])
 
     def get_files_by_date(self, date, for_upload=False):
         mfs = self.sources()[date]
@@ -176,7 +181,7 @@ class DateLib:
         if state == STATE_NONE:
             return [(date, STATE_NONE) for date in self.get_nonprocessed()]
 
-        return [(date, state) for date in self.__get_results_dates_by_state(state)]
+        return [(date, state) for date in self.__get_results_dates_by_state([state])]
 
     def list_disabled_videos(self):
         res = []

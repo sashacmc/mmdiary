@@ -106,12 +106,16 @@ class VideoProcessor:
                 return
 
         if not self.__dry_run:
+            old_state = self.__lib.get_state(date)
             self.__lib.set_in_progress(date)
             try:
                 fields = self.__process_date(date)
-                self.__lib.set_converted(date, fields)
+                if fields is not None:
+                    self.__lib.set_converted(date, fields)
+                else:
+                    self.__lib.set_state(date, old_state)
             except:
-                self.__lib.set_not_processed(date)
+                self.__lib.set_state(date, old_state)
                 raise
         else:
             fields = self.__process_date(date)
@@ -120,9 +124,9 @@ class VideoProcessor:
     def process_all(self):
         toprocess = []
         if self.__update_existing:
-            toprocess = list(self.__lib.get_converted()) + list(self.__lib.get_uploaded())
+            toprocess = sorted(self.__lib.get_converted() + self.__lib.get_uploaded())
         else:
-            toprocess = list(self.__lib.get_nonprocessed())
+            toprocess = self.__lib.get_nonprocessed()
 
         pbar = progressbar.start("Process", len(toprocess))
         for date in toprocess:
