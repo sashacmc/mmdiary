@@ -15,23 +15,92 @@ You can install MultiMedia Diary Tools via pip:
 pip install mmdiary
 ```
 
-## Command line tool usage
+## Environment Setup
 
-### Transcribe files
+Ensure you set the necessary environment variables:
+
+- MMDIARY_AUDIO_LIB_ROOT: Root directory for audio notes.
+- MMDIARY_VIDEO_LIB_ROOTS: Root directories for video notes (multiple roots can be specified, separated by semicolon).
+- MMDIARY_VIDEO_WORK_DIR: Work dir for video processing (can be HUGE)
+- MMDIARY_VIDEO_RES_DIR: Results dir for video diary files
+- MMDIARY_NOTION_CACHE: Notion uploader cache file
+- MMDIARY_CACHE: JSON processing cache file (to avoid reading all transribed files each run)
+
+Example:
+
 ```bash
-mmdiary-transcriber-run /path/to/folder/with/media/files
+export MMDIARY_AUDIO_LIB_ROOT=/path/to/audio/library
+export MMDIARY_VIDEO_LIB_ROOTS=/path/to/video/library1:/path/to/video/library2
+export MMDIARY_VIDEO_WORK_DIR=/path/to/work/dir
+export MMDIARY_VIDEO_RES_DIR=/path/to/wideo/result/dir
+export MMDIARY_NOTION_CACHE=~/.mmdiary/notion_cache.pickle
+export MMDIARY_CACHE=~/.mmdiary/json_cache.pickle
 ```
-### Upload to notion
+
+## Recommended Tools
+
+To ensure unique filenames for your files, it is recommended to use the [photo-importer](https://github.com/sashacmc/photo-importer) tool.
+
+## Step-By-Step Process Overview
+
+### Audio Diary
+
+#### Speech Recognition
+
+Use the `mmdiary-transcriber-run` utility to perform speech-to-text transcription on audio files.
+
+Command:
+
 ```bash
-mmdiary-notion-upload /path/to/folder/with/media/files
+mmdiary-transcriber-run /path/to/audio/files
 ```
-### Concat video files
+
+#### Upload to Notion
+
+Use the `mmdiary-notion-upload` utility to upload the transcribed text and audio files to Notion.
+
+Command:
 ```bash
-mmdiary-video-concat
+mmdiary-notion-upload /path/to/audio/files
 ```
-### Upload to notion
+
+### Video Diary
+
+#### Speech Recognition
+
+Use the `mmdiary-transcriber-run` utility to perform speech-to-text transcription on video files.
+
+Command:
+
 ```bash
-mmdiary-video-upload
+mmdiary-transcriber-run /path/to/video/files
+```
+
+#### Daily Video Concatenation
+
+Use the `mmdiary-video-concat` utility to merge video files into a single daily video.
+
+Command:
+```bash
+mmdiary-video-concat [dates ...]
+```
+
+#### Upload to YouTube
+
+Use the `mmdiary-video-upload` utility to upload the concatenated video to YouTube.
+
+Command:
+```bash
+mmdiary-video-upload [dates ...]
+```
+
+#### Upload to Notion
+
+Use the `mmdiary-notion-upload` utility to upload the transcribed text with YouTube links to Notion.
+
+Command:
+```bash
+mmdiary-notion-upload "$MMDIARY_VIDEO_RES_DIR"
 ```
 
 ## Contributing
