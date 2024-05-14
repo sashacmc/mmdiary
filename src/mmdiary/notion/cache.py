@@ -114,8 +114,8 @@ def main():
         db.remove_from_existing_pages(args.file)
     elif args.action == 'sync':
         db.sync_existing_pages(
-            Client(auth=os.getenv("NOTION_API_KEY")),
-            (os.getenv("NOTION_AUDIO_DB_ID"), os.getenv("NOTION_VIDEO_DB_ID")),
+            Client(auth=os.getenv("MMDIARY_NOTION_API_KEY")),
+            (os.getenv("MMDIARY_NOTION_AUDIO_DB_ID"), os.getenv("MMDIARY_NOTION_VIDEO_DB_ID")),
         )
 
 

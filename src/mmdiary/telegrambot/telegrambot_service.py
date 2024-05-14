@@ -21,7 +21,7 @@ from mmdiary.utils import log, medialib
 
 MAX_MESSAGE_SIZE = 1024
 
-g_audiofiles = medialib.MediaLib(os.getenv("AUDIO_NOTES_ROOT")).get_processed()
+g_audiofiles = medialib.MediaLib(os.getenv("MMDIARY_AUDIO_LIB_ROOT")).get_processed()
 
 
 class DateSelector:
@@ -217,12 +217,12 @@ def main() -> None:
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("telegram").setLevel(logging.WARNING)
 
-    token = os.getenv("AUDIO_NOTES_TELEGRAM_BOT_TOKEN")
+    token = os.getenv("MMDIARY_TELEGRAM_BOT_TOKEN")
 
     job_queue = JobQueue()
     job_queue.run_daily(
         job_random,
-        datetime.strptime(os.getenv("AUDIO_NOTES_TELEGRAM_AUTO_SEND_TIME"), '%H:%M:%S').time(),
+        datetime.strptime(os.getenv("MMDIARY_TELEGRAM_AUTO_SEND_TIME"), '%H:%M:%S').time(),
     )
     # job_queue.run_repeating(job_random, 60)
 
@@ -231,7 +231,7 @@ def main() -> None:
     application.auth_users = list(
         map(
             lambda u: u.lower(),
-            os.getenv("AUDIO_NOTES_TELEGRAM_USERS").split(","),
+            os.getenv("MMDIARY_TELEGRAM_USERS").split(","),
         )
     )
     application.auto_send_chats = list(
@@ -239,7 +239,7 @@ def main() -> None:
             int,
             filter(
                 lambda v: v != '',
-                os.getenv("AUDIO_NOTES_TELEGRAM_AUTO_SEND_CHATS").split(","),
+                os.getenv("MMDIARY_TELEGRAM_AUTO_SEND_CHATS").split(","),
             ),
         )
     )

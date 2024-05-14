@@ -56,9 +56,9 @@ def delete_block(client, block_ids):
 def main():
     log.init_logger()
     try:
-        token = os.getenv("NOTION_TOKEN")
+        token = os.getenv("MMDIARY_NOTION_TOKEN")
         if not token:
-            logging.error("No auth token provided. Please set NOTION_TOKEN env variable.")
+            logging.error("No auth token provided. Please set MMDIARY_NOTION_TOKEN env variable.")
             return 1
 
         client = NotionClient(token_v2=token)

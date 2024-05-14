@@ -194,7 +194,7 @@ def get_time_from_timestring(time):
 
 
 def main():
-    lib = MediaLib(os.getenv("AUDIO_NOTES_ROOT"))
+    lib = MediaLib(os.getenv("MMDIARY_AUDIO_LIB_ROOT"))
     for f in lib.get_new():
         print(f)
 

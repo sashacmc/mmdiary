@@ -18,8 +18,8 @@ Please declare enviromnent variables before use:
         Can be found/created there: https://console.cloud.google.com/apis/credentials
     MMDIARY_YOUTUBE_TOKEN - Path/filename to the cached YouTube token
         Path must exists, file will be created after the first authorization
-    VIDEO_LIB_ROOTS - List of video library root dirs
-    VIDEO_PROCESSOR_RES_DIR - Result dir
+    MMDIARY_VIDEO_LIB_ROOTS - List of video library root dirs
+    MMDIARY_VIDEO_RES_DIR - Result dir
 """
 
 YOUTUBE_MAX_DESCRIPTION = 5000

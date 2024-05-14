@@ -11,8 +11,8 @@ from mmdiary.utils import log, medialib
 DESCRIPTION = """
 Diary video dates DB manipulation tool
 Please declare enviromnent variables before use:
-    VIDEO_LIB_ROOTS - List of video library root dirs
-    VIDEO_PROCESSOR_RES_DIR - Video processor result dir
+    MMDIARY_VIDEO_LIB_ROOTS - List of video library root dirs
+    MMDIARY_VIDEO_RES_DIR - Video processor result dir
 
 Possible actions:
     list_dates - Print all dates with starus
@@ -42,10 +42,10 @@ class DateLib:
         self.__scan_paths = list(
             filter(
                 None,
-                os.getenv("VIDEO_LIB_ROOTS").split(":"),
+                os.getenv("MMDIARY_VIDEO_LIB_ROOTS").split(":"),
             ),
         )
-        self.__res_dir = os.getenv("VIDEO_PROCESSOR_RES_DIR")
+        self.__res_dir = os.getenv("MMDIARY_VIDEO_RES_DIR")
         self.__results = None
         self.__sources = None
 

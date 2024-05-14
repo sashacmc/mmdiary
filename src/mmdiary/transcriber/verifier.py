@@ -25,7 +25,7 @@ Optional environment variables:
     MMDIARY_TRANSCRIBE_LANGUAGE - Transcribe language (default: "ru")
 
 Sync check require following environment variables:
-    NOTION_TOKEN - Notion web auth token
+    MMDIARY_NOTION_TOKEN - Notion web auth token
     MMDIARY_NOTION_CACHE_FILE - Cache file
 """
 
@@ -124,7 +124,7 @@ class Verifier:
         self.__sync_local = sync in ('all', 'local')
         self.__sync_notion = sync in ('all', 'notion')
         self.__cache = cache.Cache()
-        self.__notion = NotionClient(token_v2=os.getenv("NOTION_TOKEN"))
+        self.__notion = NotionClient(token_v2=os.getenv("MMDIARY_NOTION_TOKEN"))
         self.__language = os.getenv("MMDIARY_TRANSCRIBE_LANGUAGE", "ru")
 
         self.__local_sources = {}

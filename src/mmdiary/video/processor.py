@@ -15,9 +15,9 @@ from mmdiary.utils.medialib import TIME_OUT_FORMAT
 DESCRIPTION = """
 Concatente diary videos and generate aggregated JSON file
 Please declare enviromnent variables before use:
-    VIDEO_LIB_ROOTS - List of video library root dirs
-    VIDEO_PROCESSOR_WORK_DIR - Work dir for temp files (can be huge!) 
-    VIDEO_PROCESSOR_RES_DIR - Result dir
+    MMDIARY_VIDEO_LIB_ROOTS - List of video library root dirs
+    MMDIARY_VIDEO_WORK_DIR - Work dir for temp files (can be huge!) 
+    MMDIARY_VIDEO_RES_DIR - Result dir
 """
 
 
@@ -27,13 +27,13 @@ class VideoProcessor:
         self.__json_only = json_only
         self.__force = force
         self.__dry_run = dry_run
-        self.__work_dir = os.getenv("VIDEO_PROCESSOR_WORK_DIR")
+        self.__work_dir = os.getenv("MMDIARY_VIDEO_WORK_DIR")
         if not self.__work_dir:
-            raise UserWarning("VIDEO_PROCESSOR_WORK_DIR not defined")
+            raise UserWarning("MMDIARY_VIDEO_WORK_DIR not defined")
         os.makedirs(self.__work_dir, exist_ok=True)
-        self.__res_dir = os.getenv("VIDEO_PROCESSOR_RES_DIR")
+        self.__res_dir = os.getenv("MMDIARY_VIDEO_RES_DIR")
         if not self.__res_dir:
-            raise UserWarning("VIDEO_PROCESSOR_WORK_DIR not defined")
+            raise UserWarning("MMDIARY_VIDEO_WORK_DIR not defined")
         os.makedirs(self.__res_dir, exist_ok=True)
 
         self.__lib = datelib.DateLib()

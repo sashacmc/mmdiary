@@ -19,13 +19,13 @@ from mmdiary.video.uploader import seconds_to_time
 DESCRIPTION = """
 Uploads transcribed file(s) to the notion database.
 Please declare enviromnent variables before use:
-    NOTION_TOKEN - Notion web auth token, please obtain the `token_v2` value by inspectingn
+    MMDIARY_NOTION_TOKEN - Notion web auth token, please obtain the `token_v2` value by inspectingn
         your browser cookies on a logged-in (non-guest) session on Notion.so
-    NOTION_API_KEY - Notion API key, please create notion integration and provide an API key
+    MMDIARY_NOTION_API_KEY - Notion API key, please create notion integration and provide an API key
         see details there: https://www.notion.so/my-integrations
         (don't forget to share your page/workspace with the integration you created)
-    NOTION_AUDIO_DB_ID - Notion Database ID for Audio Notes (can be created by --init command)
-    NOTION_VIDEO_DB_ID - Notion Database ID for Video Diary (can be created by --init command)
+    MMDIARY_NOTION_AUDIO_DB_ID - Notion Database ID for Audio Notes (can be created by --init command)
+    MMDIARY_NOTION_VIDEO_DB_ID - Notion Database ID for Video Diary (can be created by --init command)
     MMDIARY_NOTION_CACHE_FILE - Cache file
 """
 
@@ -421,18 +421,18 @@ def main():
 
     log.init_logger(args.logfile, level=logging.DEBUG)
 
-    token = os.getenv("NOTION_TOKEN")
+    token = os.getenv("MMDIARY_NOTION_TOKEN")
     if not token:
-        print("NOTION_TOKEN was not set")
+        print("MMDIARY_NOTION_TOKEN was not set")
         sys.exit(1)
 
-    api_key = os.getenv("NOTION_API_KEY")
+    api_key = os.getenv("MMDIARY_NOTION_API_KEY")
     if not api_key:
-        print("NOTION_API_KEY was not set")
+        print("MMDIARY_NOTION_API_KEY was not set")
         sys.exit(1)
 
-    audio_db_id = os.getenv("NOTION_AUDIO_DB_ID")
-    video_db_id = os.getenv("NOTION_VIDEO_DB_ID")
+    audio_db_id = os.getenv("MMDIARY_NOTION_AUDIO_DB_ID")
+    video_db_id = os.getenv("MMDIARY_NOTION_VIDEO_DB_ID")
 
     nup = NotionUploader(
         token=token,
@@ -447,17 +447,19 @@ def main():
         audio_db_id, video_db_id = nup.init_databases(args.init)
         print("Databases inited")
         print("Plase set ids to your enviromnent:")
-        print(f"export NOTION_AUDIO_DB_ID='{audio_db_id}'")
-        print(f"export NOTION_VIDEO_DB_ID='{video_db_id}'")
+        print(f"export MMDIARY_NOTION_AUDIO_DB_ID='{audio_db_id}'")
+        print(f"export MMDIARY_NOTION_VIDEO_DB_ID='{video_db_id}'")
         print("(don't forget to share created DBs with the your integration)")
         return
 
     if not api_key:
-        print("NOTION_CACHE_DB_FILE was not set")
+        print("MMDIARY_NOTION_CACHE was not set")
         sys.exit(1)
 
     if not audio_db_id or not video_db_id:
-        print("NOTION_AUDIO_DB_ID or NOTION_VIDEO_DB_ID was not set, please use '--init'")
+        print(
+            "MMDIARY_NOTION_AUDIO_DB_ID or MMDIARY_NOTION_VIDEO_DB_ID was not set, please use '--init'"
+        )
         sys.exit(1)
 
     if args.inpath is None:
