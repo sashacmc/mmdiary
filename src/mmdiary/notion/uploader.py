@@ -458,7 +458,8 @@ def main():
 
     if not audio_db_id or not video_db_id:
         print(
-            "MMDIARY_NOTION_AUDIO_DB_ID or MMDIARY_NOTION_VIDEO_DB_ID was not set, please use '--init'"
+            "MMDIARY_NOTION_AUDIO_DB_ID or MMDIARY_NOTION_VIDEO_DB_ID was not set,",
+            "please use '--init'",
         )
         sys.exit(1)
 
