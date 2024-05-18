@@ -103,6 +103,28 @@ def clean_wrong_symbols(s, language):
     return res
 
 
+def cut_long_words(s):
+    lis = []
+    words = s.split(" ")
+    for w in words:
+        lis.append(w[:30])
+
+    res = " ".join(lis)
+    if res != s:
+        logging.debug("Has long words: '%s'->'%s'", s, res)
+    return res
+
+
+def remove_duplicate_lines(src):
+    res = src[0:2]
+    for i in range(2, len(src)):
+        if src[i] != src[i - 1] or src[i] != src[i - 2]:
+            res.append(src[i])
+    if res != src:
+        logging.debug("Has string duplicates: '%s'->'%s'", src, res)
+    return res
+
+
 def check_text(text, language):
     if text == "":
         return text
@@ -115,7 +137,8 @@ def check_text(text, language):
             if s == "":
                 logging.debug("Has empty string (was '%s')", t)
             else:
-                res.append(s)
+                res.append(cut_long_words(s))
+    res = remove_duplicate_lines(res)
     return "\n".join(res)
 
 

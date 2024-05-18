@@ -1,6 +1,6 @@
 import pytest
 
-from mmdiary.transcriber.verifier import check_text
+from mmdiary.transcriber.verifier import check_text, remove_duplicate_lines
 
 
 @pytest.mark.parametrize(
@@ -35,3 +35,21 @@ from mmdiary.transcriber.verifier import check_text
 )
 def test_hall_match(par, expected):
     assert check_text(par, "ru") == expected
+
+
+@pytest.mark.parametrize(
+    "par,expected",
+    [
+        ([], []),
+        (["line1"], ["line1"]),
+        (["line1", "line2", "line3"], ["line1", "line2", "line3"]),
+        (["line1", "line2", "line2"], ["line1", "line2", "line2"]),
+        (["line1", "line1", "line1"], ["line1", "line1"]),
+        (
+            ["line1", "line2", "line3", "line3", "line3", "line3", "line3", "line1", "line2"],
+            ["line1", "line2", "line3", "line3", "line1", "line2"],
+        ),
+    ],
+)
+def test_remove_duplicate_lines(par, expected):
+    assert remove_duplicate_lines(par) == expected
