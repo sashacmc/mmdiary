@@ -4,6 +4,7 @@ import argparse
 import logging
 import os
 
+from fnmatch import fnmatch
 from collections import defaultdict
 
 from mmdiary.utils import log, medialib
@@ -110,12 +111,19 @@ class DateLib:
             raise UserWarning(f"Incorrect state: {state}")
         self.results()[date].update_fields({"state": state})
 
-    def get_nonprocessed(self):
+    def get_nonprocessed(self, masks=None):
         all_dates = set(self.sources().keys())
         processed_dates = set(self.__get_results_dates_by_state(VALID_STATES - set([STATE_NONE])))
-        return sorted(list(all_dates - processed_dates))
+        return sorted(self.__filter_by_masks(list(all_dates - processed_dates), masks))
 
-    def __get_results_dates_by_state(self, states):
+    def __filter_by_masks(self, dates, masks):
+        if masks is None or len(dates) == 0:
+            return dates
+        if isinstance(next(iter(dates)), tuple):
+            return filter(lambda date: any(fnmatch(date[0], mask) for mask in masks), dates)
+        return filter(lambda date: any(fnmatch(date, mask) for mask in masks), dates)
+
+    def __get_results_dates_by_state(self, states, masks=None):
         for state in states:
             if state not in VALID_STATES:
                 raise UserWarning(f"Incorrect state: {state}")
@@ -123,14 +131,13 @@ class DateLib:
         for date, mf in self.results().items():
             if mf.state() in states:
                 res.append(date)
-        res.sort()
-        return res
+        return sorted(self.__filter_by_masks(res, masks))
 
-    def get_converted(self):
-        return self.__get_results_dates_by_state([STATE_CONVERTED])
+    def get_converted(self, masks=None):
+        return self.__get_results_dates_by_state([STATE_CONVERTED], masks)
 
-    def get_uploaded(self):
-        return self.__get_results_dates_by_state([STATE_UPLOADED])
+    def get_uploaded(self, masks=None):
+        return self.__get_results_dates_by_state([STATE_UPLOADED], masks)
 
     def get_files_by_date(self, date, for_upload=False):
         mfs = self.sources()[date]
@@ -170,18 +177,16 @@ class DateLib:
         self.set_not_processed(mf.recorddate())
         logging.info("Video file %s disabled", mf.name())
 
-    def list_dates(self, state):
+    def list_dates(self, state, masks):
         if state is None:
             res = {date: STATE_NONE for date in set(self.sources().keys())}
             res.update({date: mf.state() for date, mf in self.results().items()})
-            res = list(res.items())
-            res.sort()
-            return res
+            return sorted(self.__filter_by_masks(res.items(), masks))
 
         if state == STATE_NONE:
-            return [(date, STATE_NONE) for date in self.get_nonprocessed()]
+            return [(date, STATE_NONE) for date in self.get_nonprocessed(masks)]
 
-        return [(date, state) for date in self.__get_results_dates_by_state([state])]
+        return [(date, state) for date in self.__get_results_dates_by_state([state], masks)]
 
     def list_disabled_videos(self):
         res = []
@@ -222,7 +227,7 @@ def main():
     lib = DateLib()
 
     if args.action == "list_dates":
-        dates = lib.list_dates(args.state)
+        dates = lib.list_dates(args.state, [args.date])
         for date, state in dates:
             print(date, state)
         print("Total:", len(dates))

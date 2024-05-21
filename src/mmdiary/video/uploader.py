@@ -278,8 +278,8 @@ class VideoUploader:
         logging.info("Upload done: %s", date)
         return True
 
-    def process_all(self):
-        converted = list(self.__lib.get_converted())
+    def process_all(self, masks):
+        converted = list(self.__lib.get_converted(masks))
 
         pbar = progressbar.start("Upload", len(converted))
         err_count = 0
@@ -317,14 +317,7 @@ def main():
 
     vup = VideoUploader(args.update)
 
-    res_count = 0
-    err_count = 0
-    if len(args.dates) == 0:
-        res_count, err_count = vup.process_all()
-    else:
-        for date in args.dates:
-            vup.process_date(date)
-            res_count += 1
+    res_count, err_count = vup.process_all(args.dates)
 
     logging.info("Uploader done: %s, errors: %s", res_count, err_count)
 

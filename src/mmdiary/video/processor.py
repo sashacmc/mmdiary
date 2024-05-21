@@ -121,12 +121,12 @@ class VideoProcessor:
             fields = self.__process_date(date)
             logging.debug("dry_run result: %s", fields)
 
-    def process_all(self):
+    def process_all(self, masks):
         toprocess = []
         if self.__update_existing:
-            toprocess = sorted(self.__lib.get_converted() + self.__lib.get_uploaded())
+            toprocess = sorted(self.__lib.get_converted(masks) + self.__lib.get_uploaded(masks))
         else:
-            toprocess = self.__lib.get_nonprocessed()
+            toprocess = self.__lib.get_nonprocessed(masks)
 
         pbar = progressbar.start("Process", len(toprocess))
         for date in toprocess:
@@ -168,11 +168,7 @@ def main():
 
     vp = VideoProcessor(args.update, args.json_only, args.force, args.dry_run)
 
-    if len(args.dates) == 0:
-        vp.process_all()
-    else:
-        for date in args.dates:
-            vp.process_date(date)
+    vp.process_all(args.dates)
 
     logging.info("Processor done.")
 
