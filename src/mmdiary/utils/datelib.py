@@ -117,7 +117,7 @@ class DateLib:
         return sorted(self.__filter_by_masks(list(all_dates - processed_dates), masks))
 
     def __filter_by_masks(self, dates, masks):
-        if masks is None or len(dates) == 0:
+        if masks is None or len(masks) == 0 or len(dates) == 0:
             return dates
         if isinstance(next(iter(dates)), tuple):
             return filter(lambda date: any(fnmatch(date[0], mask) for mask in masks), dates)
