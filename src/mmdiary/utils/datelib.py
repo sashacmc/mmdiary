@@ -16,9 +16,11 @@ Please declare enviromnent variables before use:
     MMDIARY_VIDEO_RES_DIR - Video processor result dir
 
 Possible actions:
-    list_dates - Print all dates with starus
-    disable_video - Set a flag for video file to disable concatenneting and uploading,
+    list_dates - Print all dates with status
+    list_files - Print all files for date
+    disable_video - Set a flag for video file to disable concatenating and uploading,
                     also mark corresponded date as not processed for future regeneration
+    list_disabled_videos - List videos marked as disabled 
     set_reupload - Mark a video as not uploaded for future reupload
                    (e.g. if video was deleted on the YouTube)
 """
