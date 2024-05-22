@@ -29,21 +29,25 @@ Ensure you set the necessary environment variables:
 - `MMDIARY_CACHE`: JSON processing cache file (to avoid reading all transribed files each run)
 - `MMDIARY_YOUTUBE_CLIENT_SECRETS`: Path to `client_secrets.json` (see below)
 - `MMDIARY_YOUTUBE_TOKEN`: Path to `token.json` (see below)
+- `MMDIARY_NOTION_AUDIO_DB_ID`: Notion Audio DB ID (see below)
+- `MMDIARY_NOTION_VIDEO_DB_ID`: Notion Video DB ID (see below) 
 
 
 Example:
 
 ```bash
-export MMDIARY_AUDIO_LIB_ROOT=/path/to/audio/library
-export MMDIARY_VIDEO_LIB_ROOTS=/path/to/video/library1:/path/to/video/library2
-export MMDIARY_VIDEO_WORK_DIR=/path/to/work/dir
-export MMDIARY_VIDEO_RES_DIR=/path/to/wideo/result/dir
+export MMDIARY_AUDIO_LIB_ROOT="/path/to/audio/library"
+export MMDIARY_VIDEO_LIB_ROOTS="/path/to/video/library1:/path/to/video/library2"
+export MMDIARY_VIDEO_WORK_DIR=/"path/to/work/dir"
+export MMDIARY_VIDEO_RES_DIR="/path/to/wideo/result/dir"
 export MMDIARY_NOTION_API_KEY="your_notion_api_key_here"
 export MMDIARY_NOTION_TOKEN="your_notion_auth_token_v2_here"
-export MMDIARY_NOTION_CACHE=~/.mmdiary/notion_cache.pickle
-export MMDIARY_CACHE=~/.mmdiary/json_cache.pickle
+export MMDIARY_NOTION_CACHE="~/.mmdiary/notion_cache.pickle"
+export MMDIARY_CACHE="~/.mmdiary/json_cache.pickle"
 export MMDIARY_YOUTUBE_CLIENT_SECRETS="~/.mmdiary/client_secrets.json"
 export MMDIARY_YOUTUBE_TOKEN="~/.mmdiary/token.json"
+export MMDIARY_NOTION_AUDIO_DB_ID="7da1480baa9f565198d3fa54c49b1b23"
+export MMDIARY_NOTION_VIDEO_DB_ID="25225aac51ea5cf0bcc74f8c225fbb63"
 ```
 
 ## Recommended Tools
@@ -81,6 +85,29 @@ To integrate Multimedia Diary Tools with Notion, you'll need to set up both an A
      ```bash
      export MMDIARY_NOTION_TOKEN="your_notion_auth_token_v2_here"
      ```
+
+### Initializing Notion Databases
+
+Before you can upload audio (with text) and links to videos (with text) to Notion, you need to create the necessary databases. Follow these steps:
+
+1. **Run the Initialization Script**:
+   - Use the `mmdiary-notion-upload` utility with the `--init` option to create the required databases on a specified Notion page.
+   - Command:
+     ```bash
+     mmdiary-notion-upload --init ROOT_PAGE_ID
+     ```
+   - Make sure the integration has access to this page.
+
+2. **Set the Database IDs as Environment Variables**:
+   - After running the script, two databases will be created on the specified page. Retrieve their IDs and save them in environment variables.
+   - Example:
+     ```bash
+     export MMDIARY_NOTION_AUDIO_DB_ID='7da1480baa9f565198d3fa54c49b1b23'
+     export MMDIARY_NOTION_VIDEO_DB_ID='25225aac51ea5cf0bcc74f8c225fbb63'
+     ```
+
+3. **Move the Databases if Needed**:
+   - You can move the databases to other pages or to the root of your workspace. If you do this, ensure the integration still has access to them.
 
 ## YouTube Setup
 
