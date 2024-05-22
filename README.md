@@ -19,12 +19,15 @@ pip install mmdiary
 
 Ensure you set the necessary environment variables:
 
-- MMDIARY_AUDIO_LIB_ROOT: Root directory for audio notes.
-- MMDIARY_VIDEO_LIB_ROOTS: Root directories for video notes (multiple roots can be specified, separated by semicolon).
-- MMDIARY_VIDEO_WORK_DIR: Work dir for video processing (can be HUGE)
-- MMDIARY_VIDEO_RES_DIR: Results dir for video diary files
-- MMDIARY_NOTION_CACHE: Notion uploader cache file
-- MMDIARY_CACHE: JSON processing cache file (to avoid reading all transribed files each run)
+- `MMDIARY_AUDIO_LIB_ROOT`: Root directory for audio notes.
+- `MMDIARY_VIDEO_LIB_ROOTS`: Root directories for video notes (multiple roots can be specified, separated by semicolon).
+- `MMDIARY_VIDEO_WORK_DIR`: Work dir for video processing (can be HUGE)
+- `MMDIARY_VIDEO_RES_DIR`: Results dir for video diary files
+- `MMDIARY_NOTION_API_KEY`: Your Notion API Key (see below).
+- `MMDIARY_NOTION_TOKEN`: Your Notion Auth Token v2 (see below).
+- `MMDIARY_NOTION_CACHE`: Notion uploader cache file
+- `MMDIARY_CACHE`: JSON processing cache file (to avoid reading all transribed files each run)
+
 
 Example:
 
@@ -33,6 +36,8 @@ export MMDIARY_AUDIO_LIB_ROOT=/path/to/audio/library
 export MMDIARY_VIDEO_LIB_ROOTS=/path/to/video/library1:/path/to/video/library2
 export MMDIARY_VIDEO_WORK_DIR=/path/to/work/dir
 export MMDIARY_VIDEO_RES_DIR=/path/to/wideo/result/dir
+export MMDIARY_NOTION_API_KEY="your_notion_api_key_here"
+export MMDIARY_NOTION_TOKEN="your_notion_auth_token_v2_here"
 export MMDIARY_NOTION_CACHE=~/.mmdiary/notion_cache.pickle
 export MMDIARY_CACHE=~/.mmdiary/json_cache.pickle
 ```
@@ -41,6 +46,38 @@ export MMDIARY_CACHE=~/.mmdiary/json_cache.pickle
 
 To ensure unique filenames for your files, it is recommended to use the [photo-importer](https://github.com/sashacmc/photo-importer) tool.
 
+## Notion Setup
+
+To integrate Multimedia Diary Tools with Notion, you'll need to set up both an API Key and an Auth Token v2. This dual setup is necessary because the API Key allows for fast and efficient operations via the official API, while the Auth Token v2 enables functionalities not available through the official API, such as file uploads and locking pages for editing.
+
+### Obtaining and Setting Up the Notion API Key
+
+1. **Create an Integration in Notion**:
+   - Go to [Notion Integrations](https://www.notion.so/my-integrations) and click on "New Integration".
+   - Follow the instructions to create a new integration and obtain your API Key.
+
+2. **Set the Environment Variable**:
+   - Save the API Key in an environment variable named `MMDIARY_NOTION_API_KEY`.
+   - Example for Unix-based systems:
+     ```bash
+     export MMDIARY_NOTION_API_KEY="your_notion_api_key_here"
+     ```
+
+### Obtaining and Setting Up the Notion Auth Token v2
+
+1. **Extract the Auth Token v2 from Your Browser**:
+   - Open Notion in your web browser and log in.
+   - Open the developer tools (usually by pressing `F12` or right-clicking on the page and selecting "Inspect").
+   - Go to the "Application" tab and find the `token_v2` under Cookies for `notion.so`.
+   - Copy the value of the `token_v2`.
+
+2. **Set the Environment Variable**:
+   - Save the Auth Token v2 in an environment variable named `MMDIARY_NOTION_TOKEN`.
+   - Example for Unix-based systems:
+     ```bash
+     export MMDIARY_NOTION_TOKEN="your_notion_auth_token_v2_here"
+     ```
+     
 ## Step-By-Step Process Overview
 
 ### Audio Diary
