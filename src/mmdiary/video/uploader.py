@@ -203,6 +203,8 @@ class VideoUploader:
             if ex.status_code == 403 and ex.error_details[0]["reason"] == "commentsDisabled":
                 logging.debug("commentsDisabled")
                 return []
+            if ex.status_code == 404 and ex.error_details[0]["reason"] == "videoNotFound":
+                raise UserWarning("videoNotFound") from None
             raise
 
     def delete_comments(self, video_id):
@@ -259,14 +261,17 @@ class VideoUploader:
             if "url" not in data:
                 raise UserWarning("URL file missed, update impossible")
             video_id = extract_video_id(data["url"])
-            self.update_video(video_id, date, time_labels)
             self.delete_comments(video_id)
+            self.update_video(video_id, date, time_labels)
         else:
             if "url" in data:
                 try:
                     self.delete_video(extract_video_id(data["url"]))
                 except Exception:
-                    logging.exception("Video deletion failed")
+                    logging.exception(
+                        "Video deletion failed, possible it was removed by YouTube, skip uploading"
+                    )
+                    raise
 
             video_id = self.upload_video(mf.name(), date, time_labels)
             if video_id is None:
