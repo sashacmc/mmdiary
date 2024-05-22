@@ -213,6 +213,68 @@ Command:
 mmdiary-notion-upload "$MMDIARY_VIDEO_RES_DIR"
 ```
 
+## Auxiliary Tools
+
+### mmdiary-transcriber-search
+
+The `mmdiary-transcriber-search` utility allows you to search through transcribed texts for specific strings. This can be useful for quickly finding occurrences of certain keywords or phrases within your audio or video transcriptions.
+
+#### Usage
+
+```bash
+mmdiary-transcriber-search /path/to/transcribed/files "search string"
+```
+
+### mmdiary-transcriber-verify
+
+The `mmdiary-transcriber-verify` utility checks the generated text from the speech-to-text transcriptions and filters out any garbage data. By default, this verification is performed automatically. Manual invocation of this tool is only necessary if the code has been modified (either manually or after updating the version) to avoid re-running the entire lengthy speech recognition process from scratch.
+
+#### Usage
+
+Simply run the utility specifying the paths to the directories or files you wish to verify in interactive mode
+
+```bash
+mmdiary-transcriber-verify /path/to/transcribed/files
+```
+
+Or run the utility with flag `-d` to check all and after with flag `-f` to apply all
+
+```bash
+mmdiary-transcriber-verify /path/to/transcribed/files -d
+[check output]
+mmdiary-transcriber-verify /path/to/transcribed/files -f
+```
+
+### mmdiary-utils-datelib
+
+The `mmdiary-utils-datelib` utility provides various functions for managing and querying your multimedia video diary files by date. It includes options to list dates, list files, disable videos, list disabled videos, and set videos for re-upload.
+
+#### Usage
+
+Possible actions:
+
+- `list_dates`: Print all dates with status.
+- `list_files`: Print all files for a date.
+- `disable_video`: Set a flag for a video file to disable concatenating and uploading, also mark the corresponding date as not processed for future regeneration.
+- `list_disabled_videos`: List videos marked as disabled.
+- `set_reupload`: Mark a video as not uploaded for future re-upload (e.g., if the video was deleted on YouTube).
+
+Example:
+
+```bash
+# list all dates with status "converted"
+mmdiary-utils-datelib -a list_dates -s converted
+
+# list files for date 2010-09-13
+mmdiary-utils-datelib -a list_files --date 2010-09-13
+
+# disable video
+mmdiary-utils-datelib -a disable_video -f 2010-04-14_17-09-50
+
+# set date 2024-03-15 to reupload
+mmdiary-utils-datelib -a set_reupload -e 2024-03-15
+```
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit issues, feature requests, or pull requests.
