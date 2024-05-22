@@ -27,6 +27,8 @@ Ensure you set the necessary environment variables:
 - `MMDIARY_NOTION_TOKEN`: Your Notion Auth Token v2 (see below).
 - `MMDIARY_NOTION_CACHE`: Notion uploader cache file
 - `MMDIARY_CACHE`: JSON processing cache file (to avoid reading all transribed files each run)
+- `MMDIARY_YOUTUBE_CLIENT_SECRETS`: Path to `client_secrets.json` (see below)
+- `MMDIARY_YOUTUBE_TOKEN`: Path to `token.json` (see below)
 
 
 Example:
@@ -40,6 +42,8 @@ export MMDIARY_NOTION_API_KEY="your_notion_api_key_here"
 export MMDIARY_NOTION_TOKEN="your_notion_auth_token_v2_here"
 export MMDIARY_NOTION_CACHE=~/.mmdiary/notion_cache.pickle
 export MMDIARY_CACHE=~/.mmdiary/json_cache.pickle
+export MMDIARY_YOUTUBE_CLIENT_SECRETS="~/.mmdiary/client_secrets.json"
+export MMDIARY_YOUTUBE_TOKEN="~/.mmdiary/token.json"
 ```
 
 ## Recommended Tools
@@ -77,6 +81,48 @@ To integrate Multimedia Diary Tools with Notion, you'll need to set up both an A
      ```bash
      export MMDIARY_NOTION_TOKEN="your_notion_auth_token_v2_here"
      ```
+
+## YouTube Setup
+
+### Obtaining and Setting Up the YouTube API Client Secrets
+
+1. **Create a Project in Google Developers Console**:
+   - Go to the [Google Developers Console](https://console.developers.google.com/).
+   - Create a new project or select an existing project.
+   - Enable the YouTube Data API v3 for the project.
+
+2. **Obtain the Client Secrets File**:
+   - Go to the Credentials section in your project.
+   - Click on "Create Credentials" and select "OAuth 2.0 Client IDs".
+   - Follow the instructions to create an OAuth 2.0 Client ID.
+   - Download the `client_secrets.json` file and save it and provide a path in an environment variable named `MMDIARY_YOUTUBE_CLIENT_SECRETS`.
+   - Example for Unix-based systems:
+     ```bash
+     export MMDIARY_YOUTUBE_CLIENT_SECRETS="~/.mmdiary/client_secrets.json"
+     ```
+### Setting the Upload Limit
+
+By default, the maximum number of videos that can be uploaded via the YouTube API is 4 per day. To request an extension:
+
+1. **Go to the YouTube API Quota Request Form**:
+   - Visit the [YouTube API Quota Request Form](https://support.google.com/youtube/contact/yt_api_form).
+
+2. **Submit the Request**:
+   - Fill out the form with the necessary details about your project and the reasons for needing a higher quota.
+   - Submit the form and wait for approval from the YouTube API team.
+
+### Authenticating with YouTube API
+
+On the first run of `mmdiary-video-upload`, a URL will be provided. Follow these steps:
+
+1. **Open the URL**:
+   - Copy the provided URL and paste it into your web browser.
+   - Select the Google account authorized for your `client_secrets.json`.
+
+2. **Enter the Authentication Code**:
+   - Copy the authentication code provided after logging in.
+   - Paste the authentication code into the prompt in your terminal.
+   - This code will be saved in file specified by `MMDIARY_YOUTUBE_TOKEN` environment variable, and you won't need to repeat this process for future uploads.
      
 ## Step-By-Step Process Overview
 
