@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.0 - 2024-05-23
+
+- Add `list_files` command to `mmdiary-utils-datelib`
+- Add update mode to video processor
+- Update video on YouTube without reupload
+- Add env variables to setup YouTube auth
+- Unify environment variable names
+- Rework hall texts processing
+- Remove duplicate lines and long words during verification
+- Add possibility to process/upload videos by date mask
+- Add video upload verification
+- Add Notion/YouTube setup to README.md
+- Add Auxiliary Tools to README.md
+- Improve deleted videos processing
+
 ## 0.2.0 - 2024-05-08
 
 - Rework verifier to use regexp
