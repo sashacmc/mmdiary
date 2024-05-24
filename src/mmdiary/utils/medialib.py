@@ -103,7 +103,7 @@ class MediaFile:
             self.json().update(fields)
         else:
             self.__json = fields
-        self.save_json(self.__json)
+        self.save_json({k: v for k, v in self.__json.items() if v is not None})
 
     def remove_json(self):
         if not self.__have_json:

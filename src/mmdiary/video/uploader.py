@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# pylint: disable=import-outside-toplevel,no-member # because of false positive on Resource
+# pylint: disable=import-outside-toplevel,line-too-long,no-member # because of false positive on Resource
 
 import argparse
 import logging
@@ -113,14 +113,21 @@ def generate_description(time_labels):
 
 
 class VideoUploader:
-    def __init__(self, update):
+    def __init__(self, update, upload_verification):
         self.__update = update
+        self.__upload_verification = upload_verification
 
         self.__lib = datelib.DateLib()
+
+        token_env = "MMDIARY_YOUTUBE_TOKEN"
+        if self.__upload_verification:
+            token_env = "MMDIARY_YOUTUBE_TOKEN_VERIFY"
+
         self.__credentials = get_youtube_credentials(
-            os.path.expanduser(os.getenv("MMDIARY_YOUTUBE_CLIENT_SECRETS", "client_secrets.json")),
-            os.path.expanduser(os.getenv("MMDIARY_YOUTUBE_TOKEN", "token.json")),
+            os.path.expanduser(os.getenv("MMDIARY_YOUTUBE_CLIENT_SECRETS")),
+            os.path.expanduser(os.getenv(token_env)),
         )
+
         self.__youtube = googleapiclient.discovery.build(
             "youtube", "v3", credentials=self.__credentials
         )
@@ -240,9 +247,8 @@ class VideoUploader:
 
         return 'items' in response and len(response['items']) > 0
 
-    def process_date(self, date):
+    def process_date(self, date, only_verified):
         mf = self.__lib.results()[date]
-        data = mf.json()
         logging.info("Process: %s", date)
 
         if not mf.have_json():
@@ -252,6 +258,11 @@ class VideoUploader:
         if update:
             logging.debug("Update only")
 
+        data = mf.json()
+        upload = data.get("upload", not only_verified)
+        if not upload:
+            logging.info("Video blocked to upload, skip")
+            return True
         time_labels = self.__gen_time_labels(data, "caption")
         comments_text = self.__gen_comments(data)
         logging.debug(comments_text)
@@ -285,18 +296,18 @@ class VideoUploader:
 
         url = generate_video_url(video_id)
         logging.info("Video uploaded: %s", url)
-        self.__lib.set_uploaded(date, url)
+        self.__lib.set_uploaded(date, url, self.__upload_verification)
         logging.info("Upload done: %s", date)
         return True
 
-    def process_all(self, masks):
+    def process_all(self, masks, only_verified):
         converted = list(self.__lib.get_converted(masks))
 
         pbar = progressbar.start("Upload", len(converted))
         err_count = 0
         for date in converted:
             try:
-                if not self.process_date(date):
+                if not self.process_date(date, only_verified):
                     return pbar.value, err_count
             except Exception:
                 err_count += 1
@@ -306,7 +317,11 @@ class VideoUploader:
         return pbar.value, err_count
 
     def verify_urls(self, masks):
-        toprocess = sorted(self.__lib.get_converted(masks) + self.__lib.get_uploaded(masks))
+        toprocess = []
+        if self.__upload_verification:
+            toprocess = sorted(self.__lib.get_uploaded(masks, True))
+        else:
+            toprocess = sorted(self.__lib.get_converted(masks) + self.__lib.get_uploaded(masks))
         res = {"count": len(toprocess), "err": 0, "no_url": 0, "exists": 0, "not_exists": 0}
         for date in toprocess:
             try:
@@ -322,6 +337,14 @@ class VideoUploader:
                 else:
                     res["not_exists"] += 1
                 logging.info("Video %s is exists: %s", date, is_exists)
+                if self.__upload_verification:
+                    if is_exists:
+                        self.__lib.set_converted(date, {"url": None, "upload": True})
+                    else:
+                        # don't delete url for videos because it still avaliable in embedded player
+                        # and it will be easy to investiagate
+                        self.__lib.set_converted(date, {"upload": False})
+
             except Exception:
                 res["err"] += 1
                 logging.exception("Video verification failed")
@@ -343,6 +366,19 @@ def __args_parse():
     parser.add_argument(
         "--verify-urls", help="Verify uploaded videos by urls check", action='store_true'
     )
+    parser.add_argument(
+        "--upload-verification",
+        help="Enable upload verification mode to test video correctly pass all YouTube restrictions:"
+        + "\n  Uses MMDIARY_YOUTUBE_TOKEN_VERIFY enviromnent varable for user token"
+        + "\n  Sets `uploadverification` state in place of `uploaded`"
+        + "\n  --veribles-urls will process only dates in `uploadverification` state and set `upload` field",
+        action='store_true',
+    )
+    parser.add_argument(
+        "--only-verified",
+        help="Upload to main channel only video witch already pass verification",
+        action='store_true',
+    )
     return parser.parse_args()
 
 
@@ -351,14 +387,14 @@ def main():
     log.init_logger(args.logfile, logging.DEBUG)
     logging.getLogger("py.warnings").setLevel(logging.ERROR)
 
-    vup = VideoUploader(args.update)
+    vup = VideoUploader(args.update, args.upload_verification)
 
     if args.verify_urls:
         res = vup.verify_urls(args.dates)
         logging.info("Verification done: %s", res)
         return
 
-    res_count, err_count = vup.process_all(args.dates)
+    res_count, err_count = vup.process_all(args.dates, args.only_verified)
     logging.info("Uploader done: %s, errors: %s", res_count, err_count)
 
 

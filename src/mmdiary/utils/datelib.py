@@ -29,6 +29,7 @@ STATE_NONE = "none"
 STATE_INPROCESS = "inprocess"
 STATE_CONVERTED = "converted"
 STATE_UPLOADED = "uploaded"
+STATE_UPLOAD_VERIFICATION = "uploadverification"
 
 VALID_STATES = set(
     [
@@ -36,6 +37,7 @@ VALID_STATES = set(
         STATE_INPROCESS,
         STATE_CONVERTED,
         STATE_UPLOADED,
+        STATE_UPLOAD_VERIFICATION,
     ]
 )
 
@@ -105,8 +107,10 @@ class DateLib:
         new_fields["state"] = STATE_CONVERTED
         self.results()[date].update_fields(new_fields)
 
-    def set_uploaded(self, date, url):
-        self.results()[date].update_fields({"state": STATE_UPLOADED, "url": url})
+    def set_uploaded(self, date, url, for_verification=False):
+        self.results()[date].update_fields(
+            {"state": STATE_UPLOAD_VERIFICATION if for_verification else STATE_UPLOADED, "url": url}
+        )
 
     def set_state(self, date, state):
         if state not in VALID_STATES:
@@ -138,8 +142,10 @@ class DateLib:
     def get_converted(self, masks=None):
         return self.__get_results_dates_by_state([STATE_CONVERTED], masks)
 
-    def get_uploaded(self, masks=None):
-        return self.__get_results_dates_by_state([STATE_UPLOADED], masks)
+    def get_uploaded(self, masks=None, for_verification=False):
+        return self.__get_results_dates_by_state(
+            [STATE_UPLOAD_VERIFICATION] if for_verification else [STATE_UPLOADED], masks
+        )
 
     def get_files_by_date(self, date, for_upload=False):
         mfs = self.sources()[date]
