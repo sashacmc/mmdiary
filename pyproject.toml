@@ -49,6 +49,7 @@ dependencies = [
 	"openai-whisper",
 	"photo_importer",
 	"mixvideoconcat",
+	"dailymotion",
 	"google-auth-oauthlib",
 	"google-api-python-client",
 ]
