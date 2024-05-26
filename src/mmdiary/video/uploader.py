@@ -122,10 +122,11 @@ class VideoUploader:
         token_env = "MMDIARY_YOUTUBE_TOKEN"
         if self.__upload_verification:
             token_env = "MMDIARY_YOUTUBE_TOKEN_VERIFY"
-
+        token_file = os.path.expanduser(os.getenv(token_env))
+        self.__account = os.path.split(token_file)[1]
         self.__credentials = get_youtube_credentials(
             os.path.expanduser(os.getenv("MMDIARY_YOUTUBE_CLIENT_SECRETS")),
-            os.path.expanduser(os.getenv(token_env)),
+            token_file,
         )
 
         self.__youtube = googleapiclient.discovery.build(
@@ -295,8 +296,14 @@ class VideoUploader:
                 logging.exception("Add comment failed")
 
         url = generate_video_url(video_id)
-        logging.info("Video uploaded: %s", url)
-        self.__lib.set_uploaded(date, url, self.__upload_verification)
+        provider = {
+            "name": "youtube",
+            "account": self.__account,
+            "video_id": video_id,
+            "url_id": video_id,
+        }
+        logging.info("Video uploaded: %s, %s", provider, url)
+        self.__lib.set_uploaded(date, provider, url, self.__upload_verification)
         logging.info("Upload done: %s", date)
         return True
 

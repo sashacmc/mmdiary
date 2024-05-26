@@ -107,9 +107,13 @@ class DateLib:
         new_fields["state"] = STATE_CONVERTED
         self.results()[date].update_fields(new_fields)
 
-    def set_uploaded(self, date, url, for_verification=False):
+    def set_uploaded(self, date, provider, url, for_verification=False):
         self.results()[date].update_fields(
-            {"state": STATE_UPLOAD_VERIFICATION if for_verification else STATE_UPLOADED, "url": url}
+            {
+                "state": STATE_UPLOAD_VERIFICATION if for_verification else STATE_UPLOADED,
+                "provider": provider,
+                "url": url,
+            }
         )
 
     def set_state(self, date, state):
