@@ -44,6 +44,9 @@ class DailymotionAccounts:
             data = {"accounts": self.__accounts, "current": self.__current}
             json.dump(data, f, ensure_ascii=False, indent=2)
 
+    def get_all(self):
+        return self.__accounts
+
     def get(self):
         return self.__accounts[self.__current]
 
@@ -51,7 +54,7 @@ class DailymotionAccounts:
         self.__max_try -= 1
         if self.__max_try <= 0:
             return False
-        self.__current = (self.__current + 1) % self.__accounts
+        self.__current = (self.__current + 1) % len(self.__accounts)
         self.__save()
         return True
 
@@ -65,21 +68,26 @@ class VideoUploaderDailymotion:
         )
         self.__current_account = None
 
+    def __dm_auth(self, account):
+        dm = dailymotion.Dailymotion(session_store_enabled=False)
+        dm.set_grant_type(
+            "password",
+            scope=["manage_videos"],
+            api_key=account["api_key"],
+            api_secret=account["api_secret"],
+            info={"username": account["username"], "password": account["password"]},
+        )
+        return dm
+
     def upload_video(self, fname, title):
         while True:
             account = self.__accounts.get()
             self.__current_account = account["name"]
+            logging.info("Upload `%s` to `%s`", fname, self.__current_account)
             try:
-                d = dailymotion.Dailymotion()
-                d.set_grant_type(
-                    "password",
-                    scope=["manage_videos"],
-                    api_key=account["api_key"],
-                    api_secret=account["api_secret"],
-                    info={"username": account["username"], "password": account["password"]},
-                )
-                url = d.upload(fname)
-                res = d.post(
+                dm = self.__dm_auth(account)
+                url = dm.upload(fname)
+                res = dm.post(
                     "/me/videos",
                     {
                         "url": url,
@@ -94,6 +102,7 @@ class VideoUploaderDailymotion:
                 logging.debug("uploaded: %s", res)
                 return res
             except dailymotion.DailymotionApiError:
+                logging.exception("DailymotionApiError")
                 if not self.__accounts.next():
                     logging.warning("All accounts limit was reached")
                     return None
@@ -145,6 +154,13 @@ class VideoUploaderDailymotion:
             pbar.increment()
         return pbar.value, err_count
 
+    def check_accounts(self):
+        for account in self.__accounts.get_all():
+            dm = self.__dm_auth(account)
+            print(
+                dm.get("/user/" + account["name"], params={"fields": "status,limits,videos_total"})
+            )
+
 
 def __args_parse():
     parser = argparse.ArgumentParser(
@@ -152,6 +168,7 @@ def __args_parse():
     )
     parser.add_argument("dates", nargs="*", help="Dates to process")
     parser.add_argument("-l", "--logfile", help="Log file", default=None)
+    parser.add_argument("--check-accounts", help="Check accounts status", action="store_true")
     return parser.parse_args()
 
 
@@ -160,6 +177,10 @@ def main():
     log.init_logger(args.logfile, logging.DEBUG)
 
     vup = VideoUploaderDailymotion()
+
+    if args.check_accounts:
+        vup.check_accounts()
+        return
 
     res_count, err_count = vup.process_all(args.dates)
     logging.info("Uploader done: %s, errors: %s", res_count, err_count)
