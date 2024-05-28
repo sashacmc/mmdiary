@@ -4,9 +4,13 @@ import argparse
 import logging
 import json
 import os
+import requests
 import dailymotion
 
-from mmdiary.utils import log, datelib, progressbar
+
+from fp.fp import FreeProxy
+
+from mmdiary.utils import log, datelib, progressbar, proxypatch
 
 DESCRIPTION = """
 Uploads generated diary videos to Dailymotion 
@@ -67,6 +71,11 @@ class VideoUploaderDailymotion:
             os.path.expanduser(os.getenv("MMDIARY_DAILYMOTION_ACCOUNTS"))
         )
         self.__current_account = None
+        self.__reset_proxy()
+
+    def __reset_proxy(self):
+        proxypatch.set_proxy(None)
+        proxypatch.set_proxy(FreeProxy(rand=True).get())
 
     def __dm_auth(self, account):
         dm = dailymotion.Dailymotion(session_store_enabled=False)
@@ -106,6 +115,13 @@ class VideoUploaderDailymotion:
                 if not self.__accounts.next():
                     logging.warning("All accounts limit was reached")
                     return None
+                self.__reset_proxy()
+            except dailymotion.DailymotionClientError:
+                logging.warning("Probably proxy error, try other one")
+                self.__reset_proxy()
+            except requests.exceptions.ProxyError:
+                logging.warning("Probably proxy timeout, try other one")
+                self.__reset_proxy()
 
     def delete_video(self, video_id):
         logging.info("Delete: %s", video_id)
