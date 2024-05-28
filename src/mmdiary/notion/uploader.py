@@ -174,6 +174,8 @@ class NotionUploader:
                 "Date": "date",
                 "Title": "title",
                 "Created time": "created_time",
+                "Provider": "rich_text",
+                "Account": "rich_text",
             },
         )
 
@@ -183,29 +185,28 @@ class NotionUploader:
 
         return audio_db_id, video_db_id
 
-    def __add_row(self, db_id, title, date, source, processtime, icon):
+    def __prop_rich_text(self, text):
+        return {
+            "type": "rich_text",
+            "rich_text": [
+                {
+                    "type": "text",
+                    "text": {"content": text},
+                },
+            ],
+        }
+
+    def __add_row(self, db_id, title, date, source, processtime, icon, provider=None, account=None):
         properties = {
             "title": {"title": [{"text": {"content": title}}]},
             "Date": {"type": "date", "date": {"start": date}},
-            "source": {
-                "type": "rich_text",
-                "rich_text": [
-                    {
-                        "type": "text",
-                        "text": {"content": source},
-                    },
-                ],
-            },
-            "processtime": {
-                "type": "rich_text",
-                "rich_text": [
-                    {
-                        "type": "text",
-                        "text": {"content": processtime},
-                    },
-                ],
-            },
+            "source": self.__prop_rich_text(source),
+            "processtime": self.__prop_rich_text(processtime),
         }
+        if provider is not None:
+            properties["Provider"] = self.__prop_rich_text(provider)
+        if account is not None:
+            properties["Account"] = self.__prop_rich_text(account)
 
         res = self.__notion_api.pages.create(
             parent={"database_id": db_id},
@@ -312,9 +313,23 @@ class NotionUploader:
 
         self.__status["created"] += 1
 
+    def __gen_pos_url(self, provider, url, pos):
+        if provider == "youtube":
+            return f"{url}&t={int(pos)}s"
+        if provider == "dailymotion":
+            return f"{url}?queue-autoplay-next=0&start={int(pos)}"
+        raise UserWarning(f"unknown provider: {provider}")
+
+    def __gen_url(self, provider, url):
+        if provider == "youtube":
+            return url
+        if provider == "dailymotion":
+            return f"{url}?queue-autoplay-next=0"
+        raise UserWarning(f"unknown provider: {provider}")
+
     def __create_video_page(self, file):
         if file.state() != "uploaded":
-            logging.debug("file not uploaded to YouTube yet: %s", file)
+            logging.debug("file not uploaded to video provider yet: %s", file)
             return
 
         if self.__dry_run:
@@ -323,6 +338,8 @@ class NotionUploader:
 
         date = file.recorddate()
         url = file.get_field("url")
+        provider = file.get_field("provider")
+        provider_name = provider["name"]
 
         bid = self.__add_row(
             self.__video_db_id,
@@ -330,12 +347,14 @@ class NotionUploader:
             date=date,
             source=file.get_field("source"),
             processtime=file.get_field("processtime"),
+            provider=provider_name,
+            account=provider["account"],
             icon="📹",
         )
         try:
             res = self.__notion.get_block(bid)
             video = res.children.add_new(VideoBlock)
-            video.set_source_url(url)
+            video.set_source_url(self.__gen_url(provider_name, url))
 
             blocks = []
             pos = 0.0
@@ -344,7 +363,7 @@ class NotionUploader:
                 if text != "":
                     blocks += self.__gen_video_description_blocks(
                         seconds_to_time(int(pos)),
-                        f"{url}&t={int(pos)}s",
+                        self.__gen_pos_url(provider_name, url, pos),
                         medialib.get_time_from_timestring(video["timestamp"]),
                         text,
                     )
