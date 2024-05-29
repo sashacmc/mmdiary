@@ -10,7 +10,7 @@ import googleapiclient.discovery
 
 from mmdiary.utils import log, datelib, progressbar
 from mmdiary.utils.medialib import TIME_OUT_FORMAT, split_large_text
-from mmdiary.video.uploader import seconds_to_time
+from mmdiary.video.uploader.common import seconds_to_time
 
 DESCRIPTION = """
 Uploads generated diary videos to YouTube
@@ -27,9 +27,14 @@ YOUTUBE_MAX_DESCRIPTION = 5000
 YOUTUBE_MAX_COMMENT = 5000
 YOUTUBE_URL = "https://www.youtube.com/watch?v="
 
+PROVIDER_NAME = "youtube"
 
-def generate_video_url(video_id):
-    return YOUTUBE_URL + video_id
+
+def generate_video_url(provider, pos=None):
+    url = YOUTUBE_URL + provider["video_id"]
+    if pos is None:
+        return url
+    return url + f"&t={int(pos)}s"
 
 
 def extract_video_id(video_url):
@@ -243,6 +248,13 @@ class VideoUploader:
 
         return 'items' in response and len(response['items']) > 0
 
+    def __check_provider(self, data):
+        if "provider" not in data:
+            return False
+        if data["provider"]["name"] != PROVIDER_NAME:
+            raise UserWarning("Incorrect provider")
+        return True
+
     def process_date(self, date, only_verified):
         mf = self.__lib.results()[date]
         logging.info("Process: %s", date)
@@ -265,15 +277,15 @@ class VideoUploader:
 
         video_id = None
         if update:
-            if "url" not in data:
-                raise UserWarning("URL file missed, update impossible")
-            video_id = extract_video_id(data["url"])
+            if not self.__check_provider(data):
+                raise UserWarning("provider field missed, update impossible")
+            video_id = data["provider"]["video_id"]
             self.delete_comments(video_id)
             self.update_video(video_id, date, time_labels)
         else:
-            if "url" in data:
+            if self.__check_provider(data):
                 try:
-                    self.delete_video(extract_video_id(data["url"]))
+                    self.delete_video(data["provider"]["video_id"])
                 except Exception:
                     logging.exception(
                         "Video deletion failed, possible it was removed by YouTube, skip uploading"
@@ -290,15 +302,14 @@ class VideoUploader:
             except Exception:
                 logging.exception("Add comment failed")
 
-        url = generate_video_url(video_id)
         provider = {
-            "name": "youtube",
+            "name": PROVIDER_NAME,
             "account": self.__account,
             "video_id": video_id,
             "url_id": video_id,
         }
-        logging.info("Video uploaded: %s, %s", provider, url)
-        self.__lib.set_uploaded(date, provider, url, self.__upload_verification)
+        logging.info("Video uploaded: %s, %s", provider, generate_video_url(provider))
+        self.__lib.set_uploaded(date, provider, self.__upload_verification)
         logging.info("Upload done: %s", date)
         return True
 
@@ -329,10 +340,10 @@ class VideoUploader:
             try:
                 mf = self.__lib.results()[date]
                 data = mf.json()
-                if "url" not in data:
+                if "provider" not in data:
                     res["no_url"] += 1
                     continue
-                video_id = extract_video_id(data["url"])
+                video_id = data["provider"]["video_id"]
                 is_exists = self.check_video_exists(video_id)
                 if is_exists:
                     res["exists"] += 1
@@ -341,7 +352,7 @@ class VideoUploader:
                 logging.info("Video %s is exists: %s", date, is_exists)
                 if self.__upload_verification:
                     if is_exists:
-                        self.__lib.set_converted(date, {"url": None, "upload": True})
+                        self.__lib.set_converted(date, {"provider": None, "upload": True})
                     else:
                         # don't delete url for videos because it still avaliable in embedded player
                         # and it will be easy to investiagate

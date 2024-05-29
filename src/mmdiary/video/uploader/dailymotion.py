@@ -22,9 +22,14 @@ Please declare enviromnent variables before use:
 
 DAILYMOTION_EMBED_URL = "https://www.dailymotion.com/embed/video/"
 
+PROVIDER_NAME = "dailymotion"
 
-def generate_video_url(video_id):
-    return DAILYMOTION_EMBED_URL + video_id
+
+def generate_video_url(provider, pos=None):
+    url = DAILYMOTION_EMBED_URL + provider["url_id"] + "?queue-autoplay-next=0"
+    if pos is None:
+        return url
+    return url + f"&start={int(pos)}"
 
 
 class DailymotionAccounts:
@@ -142,15 +147,14 @@ class VideoUploaderDailymotion:
         if res is None:
             return False
 
-        url = generate_video_url(res["private_id"])
         provider = {
-            "name": "dailymotion",
+            "name": PROVIDER_NAME,
             "account": self.__current_account,
             "video_id": res["id"],
             "url_id": res["private_id"],
         }
-        logging.info("Video uploaded: %s, %s", provider, url)
-        self.__lib.set_uploaded(date, provider, url)
+        logging.info("Video uploaded: %s, %s", provider, generate_video_url(provider))
+        self.__lib.set_uploaded(date, provider)
         logging.info("Upload done: %s", date)
         return True
 

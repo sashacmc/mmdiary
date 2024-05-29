@@ -13,7 +13,7 @@ from notion_client import Client
 
 from mmdiary.utils import log, medialib, progressbar
 from mmdiary.notion import cache
-from mmdiary.video.uploader import seconds_to_time
+from mmdiary.video.uploader import seconds_to_time, generate_video_url
 
 
 DESCRIPTION = """
@@ -313,20 +313,6 @@ class NotionUploader:
 
         self.__status["created"] += 1
 
-    def __gen_pos_url(self, provider, url, pos):
-        if provider == "youtube":
-            return f"{url}&t={int(pos)}s"
-        if provider == "dailymotion":
-            return f"{url}?queue-autoplay-next=0&start={int(pos)}"
-        raise UserWarning(f"unknown provider: {provider}")
-
-    def __gen_url(self, provider, url):
-        if provider == "youtube":
-            return url
-        if provider == "dailymotion":
-            return f"{url}?queue-autoplay-next=0"
-        raise UserWarning(f"unknown provider: {provider}")
-
     def __create_video_page(self, file):
         if file.state() != "uploaded":
             logging.debug("file not uploaded to video provider yet: %s", file)
@@ -337,9 +323,7 @@ class NotionUploader:
             return
 
         date = file.recorddate()
-        url = file.get_field("url")
         provider = file.get_field("provider")
-        provider_name = provider["name"]
 
         bid = self.__add_row(
             self.__video_db_id,
@@ -347,14 +331,14 @@ class NotionUploader:
             date=date,
             source=file.get_field("source"),
             processtime=file.get_field("processtime"),
-            provider=provider_name,
+            provider=provider["name"],
             account=provider["account"],
             icon="📹",
         )
         try:
             res = self.__notion.get_block(bid)
             video = res.children.add_new(VideoBlock)
-            video.set_source_url(self.__gen_url(provider_name, url))
+            video.set_source_url(generate_video_url(provider))
 
             blocks = []
             pos = 0.0
@@ -363,7 +347,7 @@ class NotionUploader:
                 if text != "":
                     blocks += self.__gen_video_description_blocks(
                         seconds_to_time(int(pos)),
-                        self.__gen_pos_url(provider_name, url, pos),
+                        generate_video_url(provider, pos),
                         medialib.get_time_from_timestring(video["timestamp"]),
                         text,
                     )
