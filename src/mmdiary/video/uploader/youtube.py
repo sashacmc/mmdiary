@@ -10,6 +10,7 @@ import googleapiclient.discovery
 
 from mmdiary.utils import log, datelib, progressbar
 from mmdiary.utils.medialib import TIME_OUT_FORMAT, split_large_text
+from mmdiary.video.uploader import seconds_to_time
 
 DESCRIPTION = """
 Uploads generated diary videos to YouTube
@@ -65,12 +66,6 @@ def get_youtube_credentials(client_secrets, token_file):
         token.write(credentials.to_json())
 
     return credentials
-
-
-def seconds_to_time(seconds):
-    minutes = seconds // 60
-    seconds = seconds % 60
-    return f"{minutes:02d}:{seconds:02d}"
 
 
 def generate_description_full(time_labels):
