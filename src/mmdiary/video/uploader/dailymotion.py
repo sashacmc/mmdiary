@@ -115,17 +115,27 @@ class VideoUploaderDailymotion:
                 )
                 logging.debug("uploaded: %s", res)
                 return res
-            except dailymotion.DailymotionApiError:
+            except dailymotion.DailymotionApiError as ex:
                 logging.exception("DailymotionApiError")
-                if not self.__accounts.next():
-                    logging.warning("All accounts limit was reached")
-                    return None
-                self.__reset_proxy()
+                exstr = str(ex)
+                if "reached your upload rate limit" in exstr:
+                    if not self.__accounts.next():
+                        logging.warning("All accounts limit was reached")
+                        return None
+                    logging.info("Account reached limit, try other one")
+                    self.__reset_proxy()
+                    continue
+                if "file exceeds maximum allowed size" in exstr:
+                    logging.error("File %s too big, skip", fname)
+                    raise
             except dailymotion.DailymotionClientError:
                 logging.warning("Probably proxy error, try other one")
                 self.__reset_proxy()
             except requests.exceptions.ProxyError:
                 logging.warning("Probably proxy timeout, try other one")
+                self.__reset_proxy()
+            except requests.exceptions.SSLError:
+                logging.warning("Probably proxy max retries exceeded, try other one")
                 self.__reset_proxy()
 
     def delete_video(self, video_id):
