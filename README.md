@@ -5,7 +5,7 @@
 [![PyPI - Downloads](https://pepy.tech/badge/mmdiary)](https://pepy.tech/project/mmdiary)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.commdiarym/psf/black)
 
-Multimedia Diary Tools is a Python toolkit designed to automate the process of managing multimedia content for diary entries. This toolkit offers functionalities to scan specified folders, identify audio and video files, perform speech-to-text transcription, merge video files, and upload the resulting video content to YouTube. Additionally, it integrates with Notion to create a calendar and populate it with transcribed text from audio and video notes, accompanied by links to the original media. A Telegram bot is also provided for easy access to audio notes.
+Multimedia Diary Tools is a Python toolkit designed to automate the process of managing multimedia content for diary entries. This toolkit offers functionalities to scan specified folders, identify audio and video files, perform speech-to-text transcription, merge video files, and upload the resulting video content to YouTube/Dailymotion. Additionally, it integrates with Notion to create a calendar and populate it with transcribed text from audio and video notes, accompanied by links to the original media. A Telegram bot is also provided for easy access to audio notes.
 
 ## Installation
 
@@ -29,6 +29,7 @@ Ensure you set the necessary environment variables:
 - `MMDIARY_CACHE`: JSON processing cache file (to avoid reading all transribed files each run)
 - `MMDIARY_YOUTUBE_CLIENT_SECRETS`: Path to `client_secrets.json` (see below)
 - `MMDIARY_YOUTUBE_TOKEN`: Path to `token.json` (see below)
+- `MMDIARY_DAILYMOTION_ACCOUNTS`: Path to Dailymotion accounts configuration (see below)
 - `MMDIARY_NOTION_AUDIO_DB_ID`: Notion Audio DB ID (see below)
 - `MMDIARY_NOTION_VIDEO_DB_ID`: Notion Video DB ID (see below) 
 
@@ -46,6 +47,7 @@ export MMDIARY_NOTION_CACHE="~/.mmdiary/notion_cache.pickle"
 export MMDIARY_CACHE="~/.mmdiary/json_cache.pickle"
 export MMDIARY_YOUTUBE_CLIENT_SECRETS="~/.mmdiary/client_secrets.json"
 export MMDIARY_YOUTUBE_TOKEN="~/.mmdiary/token.json"
+export MMDIARY_DAILYMOTION_ACCOUNTS="~/.mmdiary/dailymotion_accounts.json"
 export MMDIARY_NOTION_AUDIO_DB_ID="7da1480baa9f565198d3fa54c49b1b23"
 export MMDIARY_NOTION_VIDEO_DB_ID="25225aac51ea5cf0bcc74f8c225fbb63"
 ```
@@ -140,7 +142,7 @@ By default, the maximum number of videos that can be uploaded via the YouTube AP
 
 ### Authenticating with YouTube API
 
-On the first run of `mmdiary-video-upload`, a URL will be provided. Follow these steps:
+On the first run of `mmdiary-video-upload-youtube`, a URL will be provided. Follow these steps:
 
 1. **Open the URL**:
    - Copy the provided URL and paste it into your web browser.
@@ -150,6 +152,66 @@ On the first run of `mmdiary-video-upload`, a URL will be provided. Follow these
    - Copy the authentication code provided after logging in.
    - Paste the authentication code into the prompt in your terminal.
    - This code will be saved in file specified by `MMDIARY_YOUTUBE_TOKEN` environment variable, and you won't need to repeat this process for future uploads.
+
+## Dailymotion Setup
+
+### Generating API Keys
+
+1. **Create a Dailymotion Account**:
+   - If you do not already have a Dailymotion account, create one at [Dailymotion](https://www.dailymotion.com).
+
+2. **Create an Application**:
+   - Go to the [Dailymotion Studio](https://www.dailymotion.com/partner/).
+   - Select "Organization setting/API keys"
+   - Click on "Generate API key" This will provide you with an `api_key` and `api_secret`.
+
+3. **Repeat for Multiple Accounts**:
+   - If you plan to use multiple Dailymotion accounts, repeat the process for each account to generate their respective `api_key` and `api_secret`.
+
+### Setting Up the Configuration File
+
+The configuration file should be a JSON file that contains the details of all Dailymotion accounts you wish to use. This file's path must be specified by the environment variable `MMDIARY_DAILYMOTION_ACCOUNTS`.
+
+### Note for Multiple Accounts
+
+A single Dailymotion account allows uploading only 15 videos per 24 hours. If you need to upload more videos within this period, you can set up multiple accounts.
+
+### Configuration File Format
+
+The configuration file should be structured as follows:
+
+```json
+{
+  "accounts": [
+    {
+      "name": "account01",
+      "username": "account01@example.com",
+      "password": "your_password",
+      "api_key": "your_api_key",
+      "api_secret": "your_api_secret"
+    },
+    {
+      "name": "account02",
+      "username": "account02@example.com",
+      "password": "your_password",
+      "api_key": "your_api_key",
+      "api_secret": "your_api_secret"
+    }
+  ]
+}
+```
+
+Replace the placeholder values with the actual account details, API keys, and API secrets.
+
+### Setting the Environment Variable
+
+To use the configuration file, set the environment variable `MMDIARY_DAILYMOTION_ACCOUNTS` to the path of your configuration file.
+
+Example for Unix-based systems:
+
+```bash
+export MMDIARY_DAILYMOTION_ACCOUNTS="~/.mmdiary/dailymotion_accounts.json"
+```
      
 ## Step-By-Step Process Overview
 
@@ -195,13 +257,15 @@ Command:
 mmdiary-video-concat [dates ...]
 ```
 
-#### Upload to YouTube
+#### Upload to YouTube or Dailymotion
 
-Use the `mmdiary-video-upload` utility to upload the concatenated video to YouTube.
+Use the `mmdiary-video-upload-youtube` or `mmdiary-video-upload-dailymotion` utility to upload the concatenated video to YouTube/Dailymotion.
 
 Command:
 ```bash
-mmdiary-video-upload [dates ...]
+mmdiary-video-upload-youtube [dates ...]
+or
+mmdiary-video-upload-dailymotion [dates ...]
 ```
 
 #### Upload to Notion
