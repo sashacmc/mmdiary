@@ -115,6 +115,13 @@ class VideoUploaderDailymotion:
                 )
                 logging.debug("uploaded: %s", res)
                 return res
+            except dailymotion.DailymotionAuthError:
+                if not self.__accounts.next():
+                    logging.warning("All accounts limit was reached")
+                    return None
+                logging.info("Account auth error, try other one")
+                self.__reset_proxy()
+                continue
             except dailymotion.DailymotionApiError as ex:
                 logging.exception("DailymotionApiError")
                 exstr = str(ex)
@@ -186,10 +193,36 @@ class VideoUploaderDailymotion:
 
     def check_accounts(self):
         for account in self.__accounts.get_all():
-            dm = self.__dm_auth(account)
-            print(
-                dm.get("/user/" + account["name"], params={"fields": "status,limits,videos_total"})
-            )
+            name = account["name"]
+            cont = True
+            while cont:
+                try:
+                    dm = self.__dm_auth(account)
+                    print(
+                        "CHECK RESULT:",
+                        name,
+                        dm.get(
+                            "/user/" + name,
+                            params={"fields": "status,limits,videos_total"},
+                        ),
+                    )
+                    cont = False
+                except dailymotion.DailymotionApiError:
+                    print("CHECK RESULT: Api error", name)
+                    cont = False
+                except dailymotion.DailymotionAuthError:
+                    print("CHECK RESULT: Auth error", name)
+                    cont = False
+                except dailymotion.DailymotionClientError:
+                    logging.exception(name)
+                    logging.warning("Probably proxy error, try other one")
+                except requests.exceptions.ProxyError:
+                    logging.exception(name)
+                    logging.warning("Probably proxy timeout, try other one")
+                except requests.exceptions.SSLError:
+                    logging.exception(name)
+                    logging.warning("Probably proxy max retries exceeded, try other one")
+                self.__reset_proxy()
 
 
 def __args_parse():
