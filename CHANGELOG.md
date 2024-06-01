@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0 - 2024-06-02
+
+- Add Dailymotion uploader
+- Add proxy support for Dailymotion
+- Add YouTube upload verification
+- Reorganize video uploader scripts
+- Store provider/account/id in place of URL
+- Save critical files not directly, but via temp file
+
 ## 0.3.0 - 2024-05-23
 
 - Add `list_files` command to `mmdiary-utils-datelib`
