@@ -58,6 +58,9 @@ class DailymotionAccounts:
     def get_all(self):
         return self.__accounts
 
+    def count(self):
+        return len(self.__accounts)
+
     def get(self):
         return self.__accounts[self.__current]
 
@@ -71,18 +74,26 @@ class DailymotionAccounts:
 
 
 class VideoUploaderDailymotion:
-    def __init__(self):
+    def __init__(self, use_proxy):
         self.__lib = datelib.DateLib()
 
         self.__accounts = DailymotionAccounts(
             os.path.expanduser(os.getenv("MMDIARY_DAILYMOTION_ACCOUNTS"))
         )
         self.__current_account = None
+        if self.__accounts.count() == 0:
+            raise UserWarning("No account specified")
+
+        self.__use_proxy = use_proxy
+        if self.__use_proxy is None:
+            self.__use_proxy = self.__accounts.count() > 1
+
         self.__reset_proxy()
 
     def __reset_proxy(self):
-        proxypatch.set_proxy(None)
-        proxypatch.set_proxy(FreeProxy(rand=True).get())
+        if self.__use_proxy:
+            proxypatch.set_proxy(None)
+            proxypatch.set_proxy(FreeProxy(rand=True).get())
 
     def __dm_auth(self, account):
         dm = dailymotion.Dailymotion(session_store_enabled=False)
@@ -230,21 +241,34 @@ class VideoUploaderDailymotion:
                 self.__reset_proxy()
 
 
+def __use_proxy_mode(value):
+    if value == "on":
+        return True
+    if value == "off":
+        return False
+    if value == "auto":
+        return None
+    raise argparse.ArgumentTypeError(f"Invalid use_proxy value: {value}")
+
+
 def __args_parse():
     parser = argparse.ArgumentParser(
         description=DESCRIPTION, formatter_class=argparse.RawTextHelpFormatter
     )
     parser.add_argument("dates", nargs="*", help="Dates to process")
     parser.add_argument("-l", "--logfile", help="Log file", default=None)
+    parser.add_argument("--use-proxy", help="Use proxy (on, off, auto)", default="auto")
     parser.add_argument("--check-accounts", help="Check accounts status", action="store_true")
-    return parser.parse_args()
+    args = parser.parse_args()
+    args.use_proxy = __use_proxy_mode(args.use_proxy)
+    return args
 
 
 def main():
     args = __args_parse()
     log.init_logger(args.logfile, logging.DEBUG)
 
-    vup = VideoUploaderDailymotion()
+    vup = VideoUploaderDailymotion(args.use_proxy)
 
     if args.check_accounts:
         vup.check_accounts()
