@@ -20,6 +20,8 @@ Please declare enviromnent variables before use:
     MMDIARY_VIDEO_RES_DIR - Result dir
 """
 
+FILE_SIZE_LIMIT = 4 * 1024 * 1024 * 1024
+
 DAILYMOTION_EMBED_URL = "https://www.dailymotion.com/embed/video/"
 
 PROVIDER_NAME = "dailymotion"
@@ -159,6 +161,9 @@ class VideoUploaderDailymotion:
         data = mf.json()
         if "provider" in data:
             self.delete_video(data["provider"]["video_id"])
+
+        if os.path.getsize(mf.name()) >= FILE_SIZE_LIMIT:
+            raise UserWarning(f"File {mf.name()} too big, skip")
 
         res = self.upload_video(mf.name(), date)
         if res is None:
