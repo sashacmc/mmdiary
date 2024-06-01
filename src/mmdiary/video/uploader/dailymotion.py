@@ -51,9 +51,11 @@ class DailymotionAccounts:
                     self.__current = current
 
     def __save(self):
-        with open(self.__accounts_file, "w", encoding="utf-8") as f:
+        tmpfile = self.__accounts_file + ".tmp"
+        with open(tmpfile, "w", encoding="utf-8") as f:
             data = {"accounts": self.__accounts, "current": self.__current}
             json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(tmpfile, self.__accounts_file)
 
     def get_all(self):
         return self.__accounts

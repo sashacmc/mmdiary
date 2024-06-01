@@ -26,8 +26,10 @@ class JsonCache:
     def __save(self):
         if self.__filename is None or not self.__changed:
             return
-        with open(self.__filename, "wb") as f:
+        tmpfile = self.__filename + ".tmp"
+        with open(tmpfile, "wb") as f:
             pickle.dump(self.__data, f)
+        os.replace(tmpfile, self.__filename)
 
     def __load_json(self, filename):
         with open(filename, "r", encoding="utf-8") as f:
