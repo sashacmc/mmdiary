@@ -8,6 +8,8 @@ import logging
 import getpass
 
 from mmdiary.utils import log
+from mmdiary.video.uploader import youtube
+
 
 DESCRIPTION = """
 Multimedia Diary Tools is a toolkit designed to automate the process
@@ -96,10 +98,21 @@ def __init_youtube(confg_path):
 
         if not os.path.exists(os.path.expanduser(token_file)):
             break
-        if __ask_bool(f"Account token file '{token_file}' already exists, overwrite?", False):
+        if __ask_bool(f"Account token file '{token_file}' already exists, use it?", False):
             break
 
-    return {}
+    env = {
+        "MMDIARY_YOUTUBE_CLIENT_SECRETS": client_secrets,
+        "MMDIARY_YOUTUBE_TOKEN": token_file,
+    }
+    os.environ.update(env)
+    while True:
+        try:
+            youtube.VideoUploader(False, False)
+            break
+        except Exception as ex:
+            print(ex)
+    return env
 
 
 def __init_dailymotion(confg_path):
@@ -126,10 +139,12 @@ def __init_dailymotion(confg_path):
         print(
             f"Accounts data saved to: {accounts_file}, you can add other accounts after, if needed"
         )
+    # TEST ACCOUNT???
     return {"MMDIARY_DAILYMOTION_ACCOUNTS": accounts_file}
 
 
 def __init_notion(confg_path):
+    # DB CREATION
     env = {}
     env["MMDIARY_NOTION_CACHE"] = os.path.join(confg_path, "notion_cache.pickle")
     return env
@@ -167,6 +182,8 @@ def main():
     if args.init:
         __init()
         return
+
+    print("Todo batch mode")
 
 
 if __name__ == "__main__":
