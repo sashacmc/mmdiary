@@ -4,11 +4,12 @@ import argparse
 import logging
 import json
 import os
+import time
+
 import requests
 import dailymotion
 
-
-from fp.fp import FreeProxy
+from fp.fp import FreeProxy, FreeProxyException
 
 from mmdiary.utils import log, datelib, progressbar, proxypatch
 
@@ -95,7 +96,13 @@ class VideoUploaderDailymotion:
     def __reset_proxy(self):
         if self.__use_proxy:
             proxypatch.set_proxy(None)
-            proxypatch.set_proxy(FreeProxy(rand=True).get())
+            while True:
+                try:
+                    proxypatch.set_proxy(FreeProxy(rand=True).get())
+                    break
+                except FreeProxyException as ex:
+                    logging.warning("Probably connection error: %s, wait 1 minute", str(ex))
+                    time.sleep(60)
 
     def __dm_auth(self, account):
         dm = dailymotion.Dailymotion(session_store_enabled=False)
@@ -150,14 +157,11 @@ class VideoUploaderDailymotion:
                 if "file exceeds maximum allowed size" in exstr:
                     logging.error("File %s too big, skip", fname)
                     raise
-            except dailymotion.DailymotionClientError:
-                logging.warning("Probably proxy error, try other one")
+            except dailymotion.DailymotionClientError as ex:
+                logging.warning("Probably proxy error: %s, try other one", str(ex))
                 self.__reset_proxy()
-            except requests.exceptions.ProxyError:
-                logging.warning("Probably proxy timeout, try other one")
-                self.__reset_proxy()
-            except requests.exceptions.SSLError:
-                logging.warning("Probably proxy max retries exceeded, try other one")
+            except requests.exceptions.RequestException as ex:
+                logging.warning("Probably proxy error: %s, try other one", str(ex))
                 self.__reset_proxy()
 
     def delete_video(self, video_id):
