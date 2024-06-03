@@ -7,8 +7,9 @@ import argparse
 import logging
 import getpass
 
+from mmdiary.notion.uploader import NotionUploader
+from mmdiary.video.uploader import youtube, dailymotion
 from mmdiary.utils import log
-from mmdiary.video.uploader import youtube
 
 
 DESCRIPTION = """
@@ -20,6 +21,8 @@ This toolkit offers functionalities to scan specified folders,
 Additionally, it integrates with Notion to create a calendar and populate it with transcribed text
   from audio and video notes, accompanied by links to the original media.
 """
+
+README_URL = "https://github.com/sashacmc/mmdiary?tab=readme-ov-file"
 
 
 def __args_parse():
@@ -64,22 +67,32 @@ def __ask_bool(question, default_value):
         print("Invalid input. Please enter 'y' or 'n'.")
 
 
+def __init_dir(dir_name):
+    full_dir_name = os.path.expanduser(dir_name)
+    if not os.path.exists(full_dir_name):
+        if __ask_bool(f"Folder '{full_dir_name}' not exists, create?", False):
+            os.makedirs(full_dir_name)
+    return dir_name
+
+
 def __init_audio():
-    return {"MMDIARY_AUDIO_LIB_ROOT": __ask("Enter audio lib folder", "~/audio")}
+    return {"MMDIARY_AUDIO_LIB_ROOT": __init_dir(__ask("Enter audio lib folder", "~/audio"))}
 
 
 def __init_video():
     return {
-        "MMDIARY_VIDEO_LIB_ROOTS": __ask("Enter video lib folder", "~/video"),
-        "MMDIARY_VIDEO_WORK_DIR": __ask("Enter video work folder", "~/video/tmp"),
-        "MMDIARY_VIDEO_RE_DIR": __ask("Enter video result folder", "~/video/converted"),
+        "MMDIARY_VIDEO_LIB_ROOTS": __init_dir(__ask("Enter video lib folder", "~/video")),
+        "MMDIARY_VIDEO_WORK_DIR": __init_dir(__ask("Enter video work folder", "~/video/tmp")),
+        "MMDIARY_VIDEO_RES_DIR": __init_dir(
+            __ask("Enter video result folder", "~/video/converted")
+        ),
     }
 
 
 def __init_youtube(confg_path):
     print(
         "Obtain the YouTube API Client Secrets by following the instructions:",
-        "https://github.com/sashacmc/mmdiary?tab=readme-ov-file#obtaining-and-setting-up-the-youtube-api-client-secrets",
+        README_URL + "#obtaining-and-setting-up-the-youtube-api-client-secrets",
     )
 
     client_secrets = None
@@ -118,35 +131,70 @@ def __init_youtube(confg_path):
 def __init_dailymotion(confg_path):
     print(
         "Generate an API key by following the instructions:",
-        "https://github.com/sashacmc/mmdiary?tab=readme-ov-file#generating-api-keys",
+        README_URL + "#generating-api-keys",
     )
-    accounts_file = __ask(
-        "Enter accounts file name", os.path.join(confg_path, "dailymotion_accounts.json")
-    )
-    if not os.path.exists(os.path.expanduser(accounts_file)) or __ask_bool(
-        "This file already exists, would you like to overwrite it?", False
-    ):
-        account = {
-            "name": __ask("Enter account/channel name", ""),
-            "username": __ask("Enter user name (E-Mail)", ""),
-            "password": __ask_passwd("Enter password"),
-            "api_key": __ask("Enter API key", ""),
-            "api_secret": __ask_passwd("Enter API secret"),
-        }
-        with open(os.path.expanduser(accounts_file), "w", encoding="utf-8") as f:
-            data = {"accounts": [account], "current": 0}
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        print(
-            f"Accounts data saved to: {accounts_file}, you can add other accounts after, if needed"
+    env = {}
+    while True:
+        accounts_file = __ask(
+            "Enter accounts file name", os.path.join(confg_path, "dailymotion_accounts.json")
         )
-    # TEST ACCOUNT???
-    return {"MMDIARY_DAILYMOTION_ACCOUNTS": accounts_file}
+        if not os.path.exists(os.path.expanduser(accounts_file)) or __ask_bool(
+            "This file already exists, would you like to overwrite it?", False
+        ):
+            account = {
+                "name": __ask("Enter account/channel name", ""),
+                "username": __ask("Enter user name (E-Mail)", ""),
+                "password": __ask_passwd("Enter password"),
+                "api_key": __ask("Enter API key", ""),
+                "api_secret": __ask_passwd("Enter API secret"),
+            }
+            with open(os.path.expanduser(accounts_file), "w", encoding="utf-8") as f:
+                data = {"accounts": [account], "current": 0}
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            print(
+                f"Accounts data saved to: {accounts_file}, you can add other accounts after, if needed"
+            )
+        env = {
+            "MMDIARY_DAILYMOTION_ACCOUNTS": accounts_file,
+        }
+        os.environ.update(env)
+
+        vup = dailymotion.VideoUploader()
+        check_res = vup.check_accounts()
+        if len(check_res) != 0 and next(iter((check_res.values()))) is not None:
+            break
+
+    return env
 
 
 def __init_notion(confg_path):
-    # DB CREATION
     env = {}
     env["MMDIARY_NOTION_CACHE"] = os.path.join(confg_path, "notion_cache.pickle")
+    print(
+        "Generate an API key and get Auth Token by following the instructions:",
+        README_URL + "#notion-setup",
+    )
+
+    api_key = os.getenv("MMDIARY_NOTION_API_KEY", "")
+    token = os.getenv("MMDIARY_NOTION_TOKEN", "")
+    root_page_id = os.getenv("MMDIARY_NOTION_ROOT_PAGE", "")
+    while True:
+        try:
+            api_key = __ask("Enter Notion API key", api_key)
+            token = __ask("Enter Notion Auth Token v2", token)
+
+            nup = NotionUploader(token=token, api_key=api_key, audio_db_id=None, video_db_id=None)
+
+            root_page_id = __ask("Enter root page ID", root_page_id)
+
+            audio_db_id, video_db_id = nup.init_databases(root_page_id)
+            env["MMDIARY_NOTION_AUDIO_DB_ID"] = audio_db_id
+            env["MMDIARY_NOTION_VIDEO_DB_ID"] = video_db_id
+            env["MMDIARY_NOTION_TOKEN"] = token
+            env["MMDIARY_NOTION_API_KEY"] = api_key
+            break
+        except Exception as ex:
+            print(ex)
     return env
 
 
@@ -167,10 +215,11 @@ def __init():
         if __ask_bool("Will you upload video on Dailymotion", True):
             env.update(__init_dailymotion(confg_path))
 
-    env.update(__init_notion(confg_path))
+    if __ask_bool("Will you upload notes on Notion", True):
+        env.update(__init_notion(confg_path))
 
     print("\nPlease add this lines to you environment file (e.g. ~/.bashrc):\n")
-    for var, value in sorted(env.items()):
+    for var, value in env.items():
         print(f'export {var}="{value}"')
 
 
