@@ -14,8 +14,47 @@ You can install MultiMedia Diary Tools via pip:
 ```bash
 pip install mmdiary
 ```
+## Recommended Tools
 
-## Environment Setup
+To ensure unique filenames for your files, it is recommended to use the [photo-importer](https://github.com/sashacmc/photo-importer) tool.
+
+## Fast Interactive Setup
+
+To quickly set up the environment and configurations for Multimedia Diary Tools, use the interactive setup option:
+
+```sh
+mmdiary --init
+```
+
+This command will guide you through the necessary steps to configure the environment variables and other settings required for the tools to function correctly.
+
+## Fast Run All in Batch Mode
+
+For processing all multimedia entries in batch mode, including transcription and uploading, you can use the following commands:
+
+### Example 1: Process audio diary entries and upload to Notion
+
+```sh
+mmdiary --audio --notion
+```
+
+This command will process all audio diary entries and upload the results to Notion.
+
+### Example 2: Process video diary entries and upload to YouTube and Notion
+
+```sh
+mmdiary --video --youtube --notion
+```
+
+This command will process all video diary entries and upload video files to YouTube and links with texts to Notion.
+
+#### Example 3: Process video diary entries and upload to Dailymotion and Notion
+
+```sh
+mmdiary --video --dailymotion --notion
+```
+
+## Manual Environment Setup
 
 Ensure you set the necessary environment variables:
 
@@ -51,10 +90,6 @@ export MMDIARY_DAILYMOTION_ACCOUNTS="~/.mmdiary/dailymotion_accounts.json"
 export MMDIARY_NOTION_AUDIO_DB_ID="7da1480baa9f565198d3fa54c49b1b23"
 export MMDIARY_NOTION_VIDEO_DB_ID="25225aac51ea5cf0bcc74f8c225fbb63"
 ```
-
-## Recommended Tools
-
-To ensure unique filenames for your files, it is recommended to use the [photo-importer](https://github.com/sashacmc/photo-importer) tool.
 
 ## Notion Setup
 
