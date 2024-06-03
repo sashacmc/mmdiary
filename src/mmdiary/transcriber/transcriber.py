@@ -89,6 +89,18 @@ class Transcriber:
 
         logging.info("Saved to: %s", file.json_name())
 
+    def process_list(self, fileslist):
+        pbar = progressbar.start("Transcribe", len(fileslist))
+
+        for af in fileslist:
+            try:
+                self.process(af)
+            except Exception:
+                logging.exception("Transcribe failed")
+            pbar.increment()
+
+        pbar.finish()
+
 
 def __args_parse():
     parser = argparse.ArgumentParser(
@@ -121,16 +133,8 @@ def main():
     )
     print("done")
 
-    pbar = progressbar.start("Transcribe", len(fileslist))
+    tr.process_list(fileslist)
 
-    for af in fileslist:
-        try:
-            tr.process(af)
-        except Exception:
-            logging.exception("Transcribe failed")
-        pbar.increment()
-
-    pbar.finish()
     logging.info("Done.")
 
 

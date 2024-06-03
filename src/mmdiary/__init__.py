@@ -7,9 +7,11 @@ import argparse
 import logging
 import getpass
 
+from mmdiary.transcriber.transcriber import Transcriber
 from mmdiary.notion.uploader import NotionUploader
 from mmdiary.video.uploader import youtube, dailymotion
-from mmdiary.utils import log
+from mmdiary.video.processor import VideoProcessor
+from mmdiary.utils import log, medialib
 
 
 DESCRIPTION = """
@@ -23,30 +25,6 @@ Additionally, it integrates with Notion to create a calendar and populate it wit
 """
 
 README_URL = "https://github.com/sashacmc/mmdiary?tab=readme-ov-file"
-
-
-def __args_parse():
-    parser = argparse.ArgumentParser(
-        description=DESCRIPTION, formatter_class=argparse.RawTextHelpFormatter
-    )
-    parser.add_argument("-l", "--logfile", help="Log file", default="/dev/null")
-
-    parser.add_argument("--init", help="Run interactive setup", action="store_true")
-
-    parser.add_argument("--video", help="Proces video diary entries", action="store_true")
-    parser.add_argument("--audio", help="Proces audio diary entries", action="store_true")
-
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument(
-        "--youtube", help="Upload video diary entries to youtube", action="store_true"
-    )
-    group.add_argument(
-        "--dailymotion", help="Upload video diary entries to dailymotion", action="store_true"
-    )
-
-    parser.add_argument("--notion", help="Upload to notion", action="store_true")
-
-    return parser.parse_args()
 
 
 def __ask(question, default_value):
@@ -121,7 +99,7 @@ def __init_youtube(confg_path):
     os.environ.update(env)
     while True:
         try:
-            youtube.VideoUploader(False, False)
+            youtube.VideoUploader()
             break
         except Exception as ex:
             print(ex)
@@ -223,6 +201,116 @@ def __init():
         print(f'export {var}="{value}"')
 
 
+def __run_transcriber(inpath):
+    lib = medialib.MediaLib(inpath)
+    fileslist = lib.get_new()
+    if len(fileslist) == 0:
+        logging.info("Nothing transcribe in folder %s", inpath)
+        return
+
+    tr = Transcriber(
+        os.getenv("MMDIARY_TRANSCRIBE_MODEL", "medium"),
+        os.getenv("MMDIARY_TRANSCRIBE_LANGUAGE", "ru"),
+    )
+    tr.process_list(fileslist)
+
+
+def __run_video_processor():
+    vp = VideoProcessor()
+    vp.process_all(None)
+
+
+def __run_youtube_uploader():
+    vup = youtube.VideoUploader()
+    res_count, err_count = vup.process_all(None)
+    logging.info("Youtube uploader done: %s, errors: %s", res_count, err_count)
+
+
+def __run_dailymotion_uploader():
+    vup = dailymotion.VideoUploader()
+    res_count, err_count = vup.process_all(None)
+    logging.info("Dailymotion uploader done: %s, errors: %s", res_count, err_count)
+
+
+def __run_notion_uploader(inpath):
+    lib = medialib.MediaLib(inpath)
+    fileslist = lib.get_processed(should_have_file=False)
+
+    if len(fileslist) == 0:
+        logging.info("Nothing upload to Notion in folder %s", inpath)
+        return
+
+    nup = NotionUploader(
+        token=os.getenv("MMDIARY_NOTION_TOKEN"),
+        api_key=os.getenv("MMDIARY_NOTION_API_KEY"),
+        audio_db_id=os.getenv("MMDIARY_NOTION_AUDIO_DB_ID"),
+        video_db_id=os.getenv("MMDIARY_NOTION_VIDEO_DB_ID"),
+        force_update=False,
+        dry_run=False,
+    )
+    nup.process_list(fileslist)
+
+
+def __run_audio_batch(args):
+    audio_root = os.getenv("MMDIARY_AUDIO_LIB_ROOT")
+    __run_transcriber(audio_root)
+    if args.notion:
+        __run_notion_uploader(audio_root)
+
+
+def __run_video_batch(args):
+    video_roots = list(
+        filter(
+            None,
+            os.getenv("MMDIARY_VIDEO_LIB_ROOTS").split(":"),
+        ),
+    )
+    for video_root in video_roots:
+        __run_transcriber(video_root)
+
+    __run_video_processor()
+
+    if args.youtube:
+        __run_youtube_uploader()
+    if args.dailymotion:
+        __run_dailymotion_uploader()
+
+    if args.notion:
+        __run_notion_uploader(os.getenv("MMDIARY_VIDEO_RES_DIR"))
+
+
+def __run_batch(args):
+    if args.audio:
+        __run_audio_batch(args)
+
+    if args.video:
+        __run_video_batch(args)
+
+
+def __args_parse():
+    parser = argparse.ArgumentParser(
+        description=DESCRIPTION, formatter_class=argparse.RawTextHelpFormatter
+    )
+    parser.add_argument("-l", "--logfile", help="Log file", default="/dev/null")
+
+    parser.add_argument("--init", help="Run interactive setup", action="store_true")
+
+    parser.add_argument("--video", help="Proces video diary entries", action="store_true")
+    parser.add_argument("--audio", help="Proces audio diary entries", action="store_true")
+
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        "--youtube", help="Upload video diary entries to youtube", action="store_true"
+    )
+    group.add_argument(
+        "--dailymotion", help="Upload video diary entries to dailymotion", action="store_true"
+    )
+
+    parser.add_argument("--notion", help="Upload to notion", action="store_true")
+
+    return parser.parse_args()
+
+
 def main():
     args = __args_parse()
 
@@ -232,7 +320,7 @@ def main():
         __init()
         return
 
-    print("Todo batch mode")
+    __run_batch(args)
 
 
 if __name__ == "__main__":

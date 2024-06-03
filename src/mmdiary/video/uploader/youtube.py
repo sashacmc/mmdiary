@@ -113,7 +113,7 @@ def generate_description(time_labels):
 
 
 class VideoUploader:
-    def __init__(self, update, upload_verification):
+    def __init__(self, update=False, upload_verification=False):
         self.__update = update
         self.__upload_verification = upload_verification
 
@@ -316,7 +316,7 @@ class VideoUploader:
         logging.info("Upload done: %s", date)
         return True
 
-    def process_all(self, masks, only_verified):
+    def process_all(self, masks, only_verified=False):
         converted = list(self.__lib.get_converted(masks))
 
         pbar = progressbar.start("Upload", len(converted))

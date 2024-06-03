@@ -22,7 +22,7 @@ Please declare enviromnent variables before use:
 
 
 class VideoProcessor:
-    def __init__(self, update_existing, json_only, force, dry_run):
+    def __init__(self, update_existing=False, json_only=False, force=False, dry_run=False):
         self.__update_existing = update_existing
         self.__json_only = json_only
         self.__force = force
