@@ -12,11 +12,13 @@ class JsonCache:
             self.__filename = os.path.expanduser(filename)
         else:
             self.__filename = None
-        self.__load()
+        self.__data = None
         self.__changed = False
         atexit.register(self.__save)
 
     def __load(self):
+        if self.__data is not None:
+            return
         if self.__filename is None or not os.path.exists(self.__filename):
             self.__data = {}
             return
@@ -40,6 +42,7 @@ class JsonCache:
             json.dump(cont, f, ensure_ascii=False, indent=2)
 
     def get(self, filename):
+        self.__load()
         try:
             file_stat = os.stat(filename)
             try:
@@ -59,6 +62,7 @@ class JsonCache:
             raise
 
     def set(self, cont, filename):
+        self.__load()
         self.__save_json(cont, filename)
         file_stat = os.stat(filename)
         self.__data[filename] = (file_stat.st_mtime, cont)
