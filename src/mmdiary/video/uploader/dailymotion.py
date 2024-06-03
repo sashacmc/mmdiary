@@ -24,6 +24,7 @@ Please declare enviromnent variables before use:
 FILE_SIZE_LIMIT = 4 * 1024 * 1024 * 1024
 
 DAILYMOTION_EMBED_URL = "https://www.dailymotion.com/embed/video/"
+DAILYMOTION_METADATA_URL = "https://www.dailymotion.com/player/metadata/video/"
 
 PROVIDER_NAME = "dailymotion"
 
@@ -76,8 +77,8 @@ class DailymotionAccounts:
         return True
 
 
-class VideoUploaderDailymotion:
-    def __init__(self, use_proxy):
+class VideoUploader:
+    def __init__(self, use_proxy=None):
         self.__lib = datelib.DateLib()
 
         self.__accounts = DailymotionAccounts(
@@ -114,6 +115,28 @@ class VideoUploaderDailymotion:
             info={"username": account["username"], "password": account["password"]},
         )
         return dm
+
+    def __check_provider(self, data, no_exception):
+        if "provider" not in data:
+            return False
+        if data["provider"]["name"] != PROVIDER_NAME:
+            if no_exception:
+                return False
+            raise UserWarning("Incorrect provider")
+        return True
+
+    def check_video_exists(self, provider):
+        try:
+            data = json.loads(requests.get(DAILYMOTION_METADATA_URL + provider["url_id"]).content)
+            err = "error" in data
+            if err:
+                return False, {
+                    "name": data["owner"]["username"],
+                    "error": data["error"]["code"],
+                }
+            return True, None
+        except requests.exceptions.RequestException as ex:
+            return False, str(ex)
 
     def upload_video(self, fname, title):
         while True:
@@ -165,8 +188,7 @@ class VideoUploaderDailymotion:
                 self.__reset_proxy()
 
     def delete_video(self, video_id):
-        logging.info("Delete: %s", video_id)
-        # Not implemented
+        logging.info("[NOT IMPLEMENTED] Delete: %s", video_id)
 
     def process_date(self, date):
         mf = self.__lib.results()[date]
@@ -213,28 +235,46 @@ class VideoUploaderDailymotion:
             pbar.increment()
         return pbar.value, err_count
 
+    def verify_urls(self, masks):
+        toprocess = sorted(self.__lib.get_converted(masks) + self.__lib.get_uploaded(masks))
+        res = {"count": len(toprocess), "err": 0, "no_url": 0, "exists": 0, "not_exists": 0}
+        for date in toprocess:
+            try:
+                mf = self.__lib.results()[date]
+                data = mf.json()
+                if not self.__check_provider(data, no_exception=True):
+                    res["no_url"] += 1
+                    continue
+
+                is_exists, info = self.check_video_exists(data["provider"])
+                if is_exists:
+                    res["exists"] += 1
+                    logging.info("Video %s exists", date)
+                else:
+                    res["not_exists"] += 1
+                    logging.info("Video %s not exists: %s", date, info)
+
+            except Exception:
+                res["err"] += 1
+                logging.exception("Video verification failed")
+        return res
+
     def check_accounts(self):
+        all_res = {}
         for account in self.__accounts.get_all():
             name = account["name"]
-            cont = True
-            while cont:
+            res = None
+            while res is None:
                 try:
                     dm = self.__dm_auth(account)
-                    print(
-                        "CHECK RESULT:",
-                        name,
-                        dm.get(
-                            "/user/" + name,
-                            params={"fields": "status,limits,videos_total"},
-                        ),
+                    res = dm.get(
+                        "/user/" + name,
+                        params={"fields": "status,limits,videos_total"},
                     )
-                    cont = False
                 except dailymotion.DailymotionApiError:
-                    print("CHECK RESULT: Api error", name)
-                    cont = False
+                    res = "API error"
                 except dailymotion.DailymotionAuthError:
-                    print("CHECK RESULT: Auth error", name)
-                    cont = False
+                    res = "Auth error"
                 except dailymotion.DailymotionClientError:
                     logging.exception(name)
                     logging.warning("Probably proxy error, try other one")
@@ -245,6 +285,9 @@ class VideoUploaderDailymotion:
                     logging.exception(name)
                     logging.warning("Probably proxy max retries exceeded, try other one")
                 self.__reset_proxy()
+            logging.info("Check result %s: %s", name, res)
+            all_res[name] = res
+        return all_res
 
 
 def __use_proxy_mode(value):
@@ -264,6 +307,9 @@ def __args_parse():
     parser.add_argument("dates", nargs="*", help="Dates to process")
     parser.add_argument("-l", "--logfile", help="Log file", default=None)
     parser.add_argument("--use-proxy", help="Use proxy (on, off, auto)", default="auto")
+    parser.add_argument(
+        "--verify-urls", help="Verify uploaded videos by urls check", action='store_true'
+    )
     parser.add_argument("--check-accounts", help="Check accounts status", action="store_true")
     args = parser.parse_args()
     args.use_proxy = __use_proxy_mode(args.use_proxy)
@@ -273,11 +319,18 @@ def __args_parse():
 def main():
     args = __args_parse()
     log.init_logger(args.logfile, logging.DEBUG)
+    logging.getLogger("urllib3.connectionpool").setLevel(logging.INFO)
 
-    vup = VideoUploaderDailymotion(args.use_proxy)
+    vup = VideoUploader(args.use_proxy)
+
+    if args.verify_urls:
+        res = vup.verify_urls(args.dates)
+        logging.info("Verification done: %s", res)
+        return
 
     if args.check_accounts:
-        vup.check_accounts()
+        for name, info in vup.check_accounts().items():
+            print(f"{name}: {info}")
         return
 
     res_count, err_count = vup.process_all(args.dates)

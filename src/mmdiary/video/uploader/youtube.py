@@ -249,10 +249,12 @@ class VideoUploader:
 
         return 'items' in response and len(response['items']) > 0
 
-    def __check_provider(self, data):
+    def __check_provider(self, data, no_exception=False):
         if "provider" not in data:
             return False
         if data["provider"]["name"] != PROVIDER_NAME:
+            if no_exception:
+                return False
             raise UserWarning("Incorrect provider")
         return True
 
@@ -341,7 +343,7 @@ class VideoUploader:
             try:
                 mf = self.__lib.results()[date]
                 data = mf.json()
-                if "provider" not in data:
+                if not self.__check_provider(data, no_exception=True):
                     res["no_url"] += 1
                     continue
                 video_id = data["provider"]["video_id"]
