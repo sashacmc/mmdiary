@@ -31,7 +31,7 @@ class VideoProcessor:
         if not self.__work_dir:
             raise UserWarning("MMDIARY_VIDEO_WORK_DIR not defined")
         os.makedirs(self.__work_dir, exist_ok=True)
-        self.__res_dir = os.getenv("MMDIARY_VIDEO_RES_DIR")
+        self.__res_dir = os.environ["MMDIARY_VIDEO_RES_DIR"]
         if not self.__res_dir:
             raise UserWarning("MMDIARY_VIDEO_WORK_DIR not defined")
         os.makedirs(self.__res_dir, exist_ok=True)

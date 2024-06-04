@@ -2,6 +2,7 @@
 # pylint: disable=line-too-long
 
 import os
+import sys
 import json
 import argparse
 import logging
@@ -89,7 +90,7 @@ def __init_youtube(confg_path):
 
         if not os.path.exists(os.path.expanduser(token_file)):
             break
-        if __ask_bool(f"Account token file '{token_file}' already exists, use it?", False):
+        if __ask_bool(f"Account token file '{token_file}' already exists, use it?", True):
             break
 
     env = {
@@ -148,6 +149,7 @@ def __init_dailymotion(confg_path):
 def __init_notion(confg_path):
     env = {}
     env["MMDIARY_NOTION_CACHE"] = os.path.join(confg_path, "notion_cache.pickle")
+    os.environ.update(env)
     print(
         "Generate an API key and get Auth Token by following the instructions:",
         README_URL + "#notion-setup",
@@ -176,6 +178,11 @@ def __init_notion(confg_path):
     return env
 
 
+def __update_env(env, newvars):
+    env.update(newvars)
+    os.environ.update(newvars)
+
+
 def __init():
     env = {}
     confg_path = __ask("Enter main configuration folder", "~/.mmdiary")
@@ -183,18 +190,18 @@ def __init():
     env["MMDIARY_CACHE"] = os.path.join(confg_path, "json_cache.pickle")
 
     if __ask_bool("Will you process audio library", True):
-        env.update(__init_audio())
+        __update_env(env, __init_audio())
 
     if __ask_bool("Will you process video library", True):
-        env.update(__init_video())
+        __update_env(env, __init_video())
 
         if __ask_bool("Will you upload video on YouTube", True):
-            env.update(__init_youtube(confg_path))
+            __update_env(env, __init_youtube(confg_path))
         if __ask_bool("Will you upload video on Dailymotion", True):
-            env.update(__init_dailymotion(confg_path))
+            __update_env(env, __init_dailymotion(confg_path))
 
     if __ask_bool("Will you upload notes on Notion", True):
-        env.update(__init_notion(confg_path))
+        __update_env(env, __init_notion(confg_path))
 
     print("\nPlease add this lines to you environment file (e.g. ~/.bashrc):\n")
     for var, value in env.items():
@@ -252,7 +259,7 @@ def __run_notion_uploader(inpath):
 
 
 def __run_audio_batch(args):
-    audio_root = os.getenv("MMDIARY_AUDIO_LIB_ROOT")
+    audio_root = os.environ["MMDIARY_AUDIO_LIB_ROOT"]
     __run_transcriber(audio_root)
     if args.notion:
         __run_notion_uploader(audio_root)
@@ -262,7 +269,7 @@ def __run_video_batch(args):
     video_roots = list(
         filter(
             None,
-            os.getenv("MMDIARY_VIDEO_LIB_ROOTS").split(":"),
+            os.environ["MMDIARY_VIDEO_LIB_ROOTS"].split(":"),
         ),
     )
     for video_root in video_roots:
@@ -276,10 +283,14 @@ def __run_video_batch(args):
         __run_dailymotion_uploader()
 
     if args.notion:
-        __run_notion_uploader(os.getenv("MMDIARY_VIDEO_RES_DIR"))
+        __run_notion_uploader(os.environ["MMDIARY_VIDEO_RES_DIR"])
 
 
 def __run_batch(args):
+    if not args.audio and not args.video:
+        print("error: --video or --audio should be specified")
+        sys.exit(1)
+
     if args.audio:
         __run_audio_batch(args)
 

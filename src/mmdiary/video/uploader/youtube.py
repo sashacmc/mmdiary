@@ -122,11 +122,11 @@ class VideoUploader:
         token_env = "MMDIARY_YOUTUBE_TOKEN"
         if self.__upload_verification:
             token_env = "MMDIARY_YOUTUBE_TOKEN_VERIFY"
-        token_file = os.path.expanduser(os.getenv(token_env))
+        token_file = os.path.expanduser(os.environ[token_env])
         logging.debug("Token file: %s", token_file)
         self.__account = os.path.splitext(os.path.basename(token_file))[0]
         self.__credentials = get_youtube_credentials(
-            os.path.expanduser(os.getenv("MMDIARY_YOUTUBE_CLIENT_SECRETS")),
+            os.path.expanduser(os.environ["MMDIARY_YOUTUBE_CLIENT_SECRETS"]),
             token_file,
         )
 

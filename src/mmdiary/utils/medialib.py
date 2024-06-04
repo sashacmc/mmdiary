@@ -115,6 +115,8 @@ class MediaFile:
 
 class MediaLib:
     def __init__(self, root):
+        if not root or not os.path.isdir(root):
+            raise UserWarning(f"Incorrect path: {root}")
         self.__root = root
 
         self.__supported_exts = []
@@ -194,7 +196,7 @@ def get_time_from_timestring(time):
 
 
 def main():
-    lib = MediaLib(os.getenv("MMDIARY_AUDIO_LIB_ROOT"))
+    lib = MediaLib(os.environ["MMDIARY_AUDIO_LIB_ROOT"])
     for f in lib.get_new():
         print(f)
 

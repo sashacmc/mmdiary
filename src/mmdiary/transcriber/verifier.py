@@ -149,7 +149,7 @@ class Verifier:
         self.__sync_local = sync in ('all', 'local')
         self.__sync_notion = sync in ('all', 'notion')
         self.__cache = cache.Cache()
-        self.__notion = NotionClient(token_v2=os.getenv("MMDIARY_NOTION_TOKEN"))
+        self.__notion = NotionClient(token_v2=os.environ["MMDIARY_NOTION_TOKEN"])
         self.__language = os.getenv("MMDIARY_TRANSCRIBE_LANGUAGE", "ru")
 
         self.__local_sources = {}

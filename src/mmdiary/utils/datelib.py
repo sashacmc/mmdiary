@@ -47,10 +47,10 @@ class DateLib:
         self.__scan_paths = list(
             filter(
                 None,
-                os.getenv("MMDIARY_VIDEO_LIB_ROOTS").split(":"),
+                os.environ["MMDIARY_VIDEO_LIB_ROOTS"].split(":"),
             ),
         )
-        self.__res_dir = os.getenv("MMDIARY_VIDEO_RES_DIR")
+        self.__res_dir = os.environ["MMDIARY_VIDEO_RES_DIR"]
         self.__results = None
         self.__sources = None
 

@@ -82,7 +82,7 @@ class VideoUploader:
         self.__lib = datelib.DateLib()
 
         self.__accounts = DailymotionAccounts(
-            os.path.expanduser(os.getenv("MMDIARY_DAILYMOTION_ACCOUNTS"))
+            os.path.expanduser(os.environ["MMDIARY_DAILYMOTION_ACCOUNTS"])
         )
         self.__current_account = None
         if self.__accounts.count() == 0:

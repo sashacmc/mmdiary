@@ -21,7 +21,7 @@ from mmdiary.utils import log, medialib
 
 MAX_MESSAGE_SIZE = 1024
 
-g_audiofiles = medialib.MediaLib(os.getenv("MMDIARY_AUDIO_LIB_ROOT")).get_processed()
+g_audiofiles = medialib.MediaLib(os.environ["MMDIARY_AUDIO_LIB_ROOT"]).get_processed()
 
 
 class DateSelector:

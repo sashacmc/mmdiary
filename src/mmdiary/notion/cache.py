@@ -11,7 +11,7 @@ from notion_client.helpers import iterate_paginated_api
 
 class Cache:
     def __init__(self):
-        self.__filename = os.path.expanduser(os.getenv("MMDIARY_NOTION_CACHE"))
+        self.__filename = os.path.expanduser(os.environ["MMDIARY_NOTION_CACHE"])
         self.__data = {}
         self.__load()
         self.__changed = False
@@ -63,6 +63,8 @@ class Cache:
 
         res = []
         for database_id in set(database_ids):
+            if database_id is None:
+                continue
             res += iterate_paginated_api(
                 notion_api.databases.query,
                 database_id=database_id,
@@ -114,8 +116,8 @@ def main():
         db.remove_from_existing_pages(args.file)
     elif args.action == 'sync':
         db.sync_existing_pages(
-            Client(auth=os.getenv("MMDIARY_NOTION_API_KEY")),
-            (os.getenv("MMDIARY_NOTION_AUDIO_DB_ID"), os.getenv("MMDIARY_NOTION_VIDEO_DB_ID")),
+            Client(auth=os.environ["MMDIARY_NOTION_API_KEY"]),
+            (os.environ["MMDIARY_NOTION_AUDIO_DB_ID"], os.environ["MMDIARY_NOTION_VIDEO_DB_ID"]),
         )
 
 
