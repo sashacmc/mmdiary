@@ -393,6 +393,10 @@ class NotionUploader:
         fileslist = list(filter(self.__filter_existing, fileslist))
         logging.debug("fileslist len after filter: %i", len(fileslist))
 
+        if len(fileslist) == 0:
+            logging.info("Nothing to do, exit")
+            return
+
         self.__status["total"] = len(fileslist)
         pbar = progressbar.start("Uploading", len(fileslist))
 
@@ -476,10 +480,6 @@ def main():
     elif os.path.isdir(args.inpath):
         lib = medialib.MediaLib(args.inpath)
         fileslist = lib.get_processed(should_have_file=False)
-
-    if len(fileslist) == 0:
-        logging.info("Nothing to do, exit")
-        return
 
     nup.process_list(fileslist)
 

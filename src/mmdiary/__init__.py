@@ -73,14 +73,14 @@ def __init_youtube(confg_path):
         README_URL + "#obtaining-and-setting-up-the-youtube-api-client-secrets",
     )
 
-    client_secrets = None
+    secrets_file = None
     while True:
-        client_secrets = __ask(
+        secrets_file = __ask(
             "Enter client_secrets file name", os.path.join(confg_path, "client_secrets.json")
         )
-        if os.path.exists(os.path.expanduser(client_secrets)):
+        if os.path.exists(os.path.expanduser(secrets_file)):
             break
-        print(f"File {client_secrets} not exists")
+        print(f"File {secrets_file} not exists")
 
     token_file = None
     while True:
@@ -93,7 +93,7 @@ def __init_youtube(confg_path):
             break
 
     env = {
-        "MMDIARY_YOUTUBE_CLIENT_SECRETS": client_secrets,
+        "MMDIARY_YOUTUBE_CLIENT_SECRETS": secrets_file,
         "MMDIARY_YOUTUBE_TOKEN": token_file,
     }
     os.environ.update(env)
