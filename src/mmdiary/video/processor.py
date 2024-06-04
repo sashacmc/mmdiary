@@ -27,13 +27,9 @@ class VideoProcessor:
         self.__json_only = json_only
         self.__force = force
         self.__dry_run = dry_run
-        self.__work_dir = os.getenv("MMDIARY_VIDEO_WORK_DIR")
-        if not self.__work_dir:
-            raise UserWarning("MMDIARY_VIDEO_WORK_DIR not defined")
+        self.__work_dir = os.path.expanduser(os.environ["MMDIARY_VIDEO_WORK_DIR"])
         os.makedirs(self.__work_dir, exist_ok=True)
-        self.__res_dir = os.environ["MMDIARY_VIDEO_RES_DIR"]
-        if not self.__res_dir:
-            raise UserWarning("MMDIARY_VIDEO_WORK_DIR not defined")
+        self.__res_dir = os.path.expanduser(os.environ["MMDIARY_VIDEO_RES_DIR"])
         os.makedirs(self.__res_dir, exist_ok=True)
 
         self.__lib = datelib.DateLib()

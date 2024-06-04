@@ -45,12 +45,15 @@ VALID_STATES = set(
 class DateLib:
     def __init__(self):
         self.__scan_paths = list(
-            filter(
-                None,
-                os.environ["MMDIARY_VIDEO_LIB_ROOTS"].split(":"),
+            map(
+                os.path.expanduser,
+                filter(
+                    None,
+                    os.environ["MMDIARY_VIDEO_LIB_ROOTS"].split(":"),
+                ),
             ),
         )
-        self.__res_dir = os.environ["MMDIARY_VIDEO_RES_DIR"]
+        self.__res_dir = os.path.expanduser(os.environ["MMDIARY_VIDEO_RES_DIR"])
         self.__results = None
         self.__sources = None
 

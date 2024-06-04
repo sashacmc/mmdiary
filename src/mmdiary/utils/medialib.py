@@ -115,9 +115,9 @@ class MediaFile:
 
 class MediaLib:
     def __init__(self, root):
-        if not root or not os.path.isdir(root):
+        if not root or not os.path.isdir(os.path.expanduser(root)):
             raise UserWarning(f"Incorrect path: {root}")
-        self.__root = root
+        self.__root = os.path.expanduser(root)
 
         self.__supported_exts = []
         for ext, tp in g_fileprop.EXT_TO_TYPE.items():

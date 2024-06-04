@@ -212,7 +212,7 @@ def __run_transcriber(inpath):
     lib = medialib.MediaLib(inpath)
     fileslist = lib.get_new()
     if len(fileslist) == 0:
-        logging.info("Nothing transcribe in folder %s", inpath)
+        logging.info("Nothing to transcribe in folder %s", inpath)
         return
 
     tr = Transcriber(
@@ -244,7 +244,7 @@ def __run_notion_uploader(inpath):
     fileslist = lib.get_processed(should_have_file=False)
 
     if len(fileslist) == 0:
-        logging.info("Nothing upload to Notion in folder %s", inpath)
+        logging.info("Nothing to upload at Notion in folder %s", inpath)
         return
 
     nup = NotionUploader(
