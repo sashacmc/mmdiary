@@ -14,9 +14,37 @@ You can install MultiMedia Diary Tools via pip:
 ```bash
 pip install mmdiary
 ```
-## Recommended Tools
+## Dependencies
 
-To ensure unique filenames for your files, it is recommended to use the [photo-importer](https://github.com/sashacmc/photo-importer) tool.
+This tool requires installed:
+
+### exiftool
+
+Can be download from https://exiftool.org or installed form package manager
+   
+Example for Debian-based systems:
+```bash
+sudo apt install exiftool
+```
+
+### ffmpeg
+
+Can be download from https://ffmpeg.org/ or installed form package manager
+   
+Example for Debian-based systems:
+```bash
+sudo apt install ffmpeg
+```
+
+### cuda (optional)
+
+It will makes transcription much faster
+
+https://docs.nvidia.com/cuda/cuda-installation-guide-linux/
+
+### photo-importer (optional)
+
+To ensure unique filenames for your media files, it is recommended to use the [photo-importer](https://github.com/sashacmc/photo-importer) tool.
 
 ## Fast Interactive Setup
 
