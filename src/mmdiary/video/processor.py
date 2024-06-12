@@ -159,7 +159,7 @@ def __args_parse():
 
 def main():
     args = __args_parse()
-    log.init_logger(args.logfile, logging.DEBUG)
+    log.init_logger(args.logfile)
     logging.getLogger("py.warnings").setLevel(logging.ERROR)
 
     vp = VideoProcessor(args.update, args.json_only, args.force, args.dry_run)

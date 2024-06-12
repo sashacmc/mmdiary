@@ -168,7 +168,6 @@ class VideoUploader:
                 self.__reset_proxy()
                 continue
             except dailymotion.DailymotionApiError as ex:
-                logging.exception("DailymotionApiError")
                 exstr = str(ex)
                 if "reached your upload rate limit" in exstr:
                     if not self.__accounts.next():
@@ -180,6 +179,7 @@ class VideoUploader:
                 if "file exceeds maximum allowed size" in exstr:
                     logging.error("File %s too big, skip", fname)
                     raise
+                logging.exception("DailymotionApiError")
             except dailymotion.DailymotionClientError as ex:
                 logging.warning("Probably proxy error: %s, try other one", str(ex))
                 self.__reset_proxy()
@@ -214,9 +214,8 @@ class VideoUploader:
             "video_id": res["id"],
             "url_id": res["private_id"],
         }
-        logging.info("Video uploaded: %s, %s", provider, generate_video_url(provider))
         self.__lib.set_uploaded(date, provider)
-        logging.info("Upload done: %s", date)
+        logging.info("Video uploaded: %s, %s", provider, generate_video_url(provider))
         return True
 
     def process_all(self, masks):
@@ -318,7 +317,7 @@ def __args_parse():
 
 def main():
     args = __args_parse()
-    log.init_logger(args.logfile, logging.DEBUG)
+    log.init_logger(args.logfile)
     logging.getLogger("urllib3.connectionpool").setLevel(logging.INFO)
 
     vup = VideoUploader(args.use_proxy)

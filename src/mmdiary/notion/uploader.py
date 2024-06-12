@@ -386,8 +386,6 @@ class NotionUploader:
         else:
             raise UserWarning("Unknown json type: {tp}")
 
-        logging.info("Saved")
-
     def process_list(self, fileslist):
         logging.debug("fileslist len before filter: %i", len(fileslist))
         fileslist = list(filter(self.__filter_existing, fileslist))
@@ -426,7 +424,7 @@ def __args_parse():
 def main():
     args = __args_parse()
 
-    log.init_logger(args.logfile, level=logging.DEBUG)
+    log.init_logger(args.logfile)
 
     token = os.getenv("MMDIARY_NOTION_TOKEN")
     if not token:

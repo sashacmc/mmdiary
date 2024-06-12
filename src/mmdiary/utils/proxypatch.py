@@ -61,6 +61,6 @@ def set_proxy(proxy):
     global __proxy
     __proxy = proxy
     if proxy is None:
-        logging.info("Proxy disabled")
+        logging.debug("Proxy disabled")
     else:
-        logging.info("Proxy %s enabled", proxy)
+        logging.debug("Proxy %s enabled", proxy)

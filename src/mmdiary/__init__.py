@@ -325,7 +325,7 @@ def __args_parse():
 def main():
     args = __args_parse()
 
-    log.init_logger(args.logfile, level=logging.DEBUG)
+    log.init_logger(args.logfile)
 
     if args.init:
         __init()

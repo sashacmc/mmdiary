@@ -10,7 +10,7 @@ LOGFMT = '[%(asctime)s] [%(name)s] [%(levelname)s] %(message)s'
 DATEFMT = '%Y-%m-%d %H:%M:%S'
 
 
-def init_logger(filename=None, level=logging.INFO):
+def init_logger(filename=None, level=None):
     """
     Initialize the logger.
 
@@ -19,6 +19,9 @@ def init_logger(filename=None, level=logging.INFO):
                                   Defaults to None.
         level (int, optional): Logging level. Defaults to logging.INFO.
     """
+
+    if level is None:
+        level = logging.getLevelName(os.getenv("MMDIARY_LOGGING_LEVEL", "INFO"))
 
     if filename is not None:
         try:

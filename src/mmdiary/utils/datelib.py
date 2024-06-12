@@ -237,7 +237,7 @@ def __args_parse():
 
 def main():
     args = __args_parse()
-    log.init_logger(level=logging.DEBUG)
+    log.init_logger()
     lib = DateLib()
 
     if args.action == "list_dates":
