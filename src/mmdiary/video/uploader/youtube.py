@@ -7,6 +7,7 @@ import os
 from datetime import datetime
 
 import googleapiclient.discovery
+from google.auth.exceptions import RefreshError
 
 from mmdiary.utils import log, datelib, progressbar
 from mmdiary.utils.medialib import TIME_OUT_FORMAT, split_large_text
@@ -122,12 +123,12 @@ class VideoUploader:
         token_env = "MMDIARY_YOUTUBE_TOKEN"
         if self.__upload_verification:
             token_env = "MMDIARY_YOUTUBE_TOKEN_VERIFY"
-        token_file = os.path.expanduser(os.environ[token_env])
-        logging.debug("Token file: %s", token_file)
-        self.__account = os.path.splitext(os.path.basename(token_file))[0]
+        self.__token_file = os.path.expanduser(os.environ[token_env])
+        logging.debug("Token file: %s", self.__token_file)
+        self.__account = os.path.splitext(os.path.basename(self.__token_file))[0]
         self.__credentials = get_youtube_credentials(
             os.path.expanduser(os.environ["MMDIARY_YOUTUBE_CLIENT_SECRETS"]),
-            token_file,
+            self.__token_file,
         )
 
         self.__youtube = googleapiclient.discovery.build(
@@ -175,8 +176,11 @@ class VideoUploader:
             if ex.status_code == 400 and ex.error_details[0]["reason"] == "uploadLimitExceeded":
                 logging.error("uploadLimitExceeded")
                 return None
-
             raise
+        except RefreshError as ex:
+            logging.error("Invalid token: %s (%s)", self.__token_file, str(ex))
+            logging.info("Remove tocken file and restart upload")
+            return None
 
     def update_video(self, video_id, title, time_labels):
         logging.debug("Update video: %s", video_id)
