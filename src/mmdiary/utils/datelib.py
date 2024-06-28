@@ -135,12 +135,21 @@ class DateLib:
             return filter(lambda date: any(fnmatch(date[0], mask) for mask in masks), dates)
         return filter(lambda date: any(fnmatch(date, mask) for mask in masks), dates)
 
-    def __get_results_dates_by_state(self, states, masks=None):
+    def __filter_by_account(self, results, account):
+        if account is None:
+            return results
+        res = {}
+        for date, mf in results.items():
+            if "provider" in mf.json() and mf.json()["provider"]["account"] == account:
+                res[date] = mf
+        return res
+
+    def __get_results_dates_by_state(self, states, masks=None, account=None):
         for state in states:
             if state not in VALID_STATES:
                 raise UserWarning(f"Incorrect state: {state}")
         res = []
-        for date, mf in self.results().items():
+        for date, mf in self.__filter_by_account(self.results(), account).items():
             if mf.state() in states:
                 res.append(date)
         return sorted(self.__filter_by_masks(res, masks))
@@ -191,7 +200,7 @@ class DateLib:
         self.set_not_processed(mf.recorddate())
         logging.info("Video file %s disabled", mf.name())
 
-    def list_dates(self, state, masks):
+    def list_dates(self, state, masks, account=None):
         if state is None:
             res = {date: STATE_NONE for date in set(self.sources().keys())}
             res.update({date: mf.state() for date, mf in self.results().items()})
@@ -200,7 +209,9 @@ class DateLib:
         if state == STATE_NONE:
             return [(date, STATE_NONE) for date in self.get_nonprocessed(masks)]
 
-        return [(date, state) for date in self.__get_results_dates_by_state([state], masks)]
+        return [
+            (date, state) for date in self.__get_results_dates_by_state([state], masks, account)
+        ]
 
     def list_disabled_videos(self):
         res = []
@@ -210,6 +221,13 @@ class DateLib:
                     res.append(mf.name())
         res.sort()
         return res
+
+    def set_reupload(self, masks, account=None):
+        dates = self.__get_results_dates_by_state([STATE_UPLOADED], masks, account)
+        for date in dates:
+            self.set_converted(date, {})
+            logging.info("%s marked to reupload", date)
+        return len(dates)
 
 
 def __args_parse():
@@ -230,8 +248,9 @@ def __args_parse():
         ],
     )
     parser.add_argument("-f", "--file", help="File name (for disable_video)")
-    parser.add_argument("-e", "--date", help="Date (for set_reupload, list_files)")
+    parser.add_argument("-e", "--date", help="Date (for set_reupload, list_files, list_dates)")
     parser.add_argument("-s", "--state", help="State for (list_dates)")
+    parser.add_argument("--account", help="Provider account (for set_reupload, list_dates)")
     return parser.parse_args()
 
 
@@ -241,7 +260,9 @@ def main():
     lib = DateLib()
 
     if args.action == "list_dates":
-        dates = lib.list_dates(args.state, [args.date] if args.date is not None else None)
+        dates = lib.list_dates(
+            args.state, [args.date] if args.date is not None else None, args.account
+        )
         for date, state in dates:
             print(date, state)
         print("Total:", len(dates))
@@ -259,10 +280,8 @@ def main():
         lib.disable_video(args.file)
         logging.info("Done.")
     elif args.action == "set_reupload":
-        if lib.get_state(args.date) != STATE_UPLOADED:
-            logging.warning("Specified date not yet uploaded: %s", args.date)
-        lib.set_converted(args.date, {})
-        logging.info("Done.")
+        cnt = lib.set_reupload(args.date, args.account)
+        print("Total:", cnt)
 
 
 if __name__ == "__main__":
