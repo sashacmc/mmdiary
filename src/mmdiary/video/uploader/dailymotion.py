@@ -179,6 +179,9 @@ class VideoUploader:
                 if "file exceeds maximum allowed size" in exstr:
                     logging.error("File %s too big, skip", fname)
                     raise
+                if "is blacklisted" in exstr:
+                    logging.error("File %s is blacklisted, skip", fname)
+                    raise
                 logging.exception("DailymotionApiError")
             except dailymotion.DailymotionClientError as ex:
                 logging.warning("Probably proxy error: %s, try other one", str(ex))
@@ -198,6 +201,11 @@ class VideoUploader:
             raise FileNotFoundError("Json file not exists")
 
         data = mf.json()
+        upload = data.get("upload", True)
+        if not upload:
+            logging.info("Video blocked to upload, skip")
+            return True
+
         if "provider" in data:
             self.delete_video(data["provider"]["video_id"])
 
