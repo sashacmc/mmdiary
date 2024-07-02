@@ -138,7 +138,7 @@ class VideoUploader:
         except requests.exceptions.RequestException as ex:
             return False, str(ex)
 
-    def upload_video(self, fname, title):
+    def upload_video(self, fname, date):
         while True:
             account = self.__accounts.get()
             self.__current_account = account["name"]
@@ -150,7 +150,7 @@ class VideoUploader:
                     "/me/videos",
                     {
                         "url": url,
-                        "title": title,
+                        "title": date,
                         "published": "true",
                         "channel": "creation",
                         "private": "true",
@@ -181,6 +181,7 @@ class VideoUploader:
                     raise
                 if "is blacklisted" in exstr:
                     logging.error("File %s is blacklisted, skip", fname)
+                    self.__lib.disable_date(date, "blacklisted")
                     raise
                 logging.exception("DailymotionApiError")
             except dailymotion.DailymotionClientError as ex:

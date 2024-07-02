@@ -361,9 +361,7 @@ class VideoUploader:
                     if is_exists:
                         self.__lib.set_converted(date, {"provider": None, "upload": True})
                     else:
-                        # don't delete url for videos because it still avaliable in embedded player
-                        # and it will be easy to investiagate
-                        self.__lib.set_converted(date, {"upload": False})
+                        self.__lib.disable_date(date, "verify_urls")
 
             except Exception:
                 res["err"] += 1
