@@ -200,6 +200,11 @@ class DateLib:
         self.set_not_processed(mf.recorddate())
         logging.info("Video file %s disabled", mf.name())
 
+    def disable_date(self, date, reason):
+        mf = self.results()[date]
+        mf.update_fields({"state": STATE_CONVERTED, "upload": False, "disabled_by": reason})
+        logging.info("Date %s was disabled", mf.name())
+
     def list_dates(self, state, masks, account=None):
         if state is None:
             res = {date: STATE_NONE for date in set(self.sources().keys())}
@@ -244,11 +249,14 @@ def __args_parse():
             "list_disabled_videos",
             "list_files",
             "disable_video",
+            "disable_date",
             "set_reupload",
         ],
     )
     parser.add_argument("-f", "--file", help="File name (for disable_video)")
-    parser.add_argument("-e", "--date", help="Date (for set_reupload, list_files, list_dates)")
+    parser.add_argument(
+        "-e", "--date", help="Date (for set_reupload, list_files, list_dates, disable_date)"
+    )
     parser.add_argument("-s", "--state", help="State for (list_dates)")
     parser.add_argument("--account", help="Provider account (for set_reupload, list_dates)")
     return parser.parse_args()
@@ -278,6 +286,9 @@ def main():
         print("Total:", len(mfs))
     elif args.action == "disable_video":
         lib.disable_video(args.file)
+        logging.info("Done.")
+    elif args.action == "disable_date":
+        lib.disable_date(args.date, "manual")
         logging.info("Done.")
     elif args.action == "set_reupload":
         cnt = lib.set_reupload(args.date, args.account)
