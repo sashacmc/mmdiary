@@ -92,6 +92,7 @@ class VideoUploader:
         if self.__use_proxy is None:
             self.__use_proxy = self.__accounts.count() > 1
 
+        self.__already_used_proxy = set()
         self.__reset_proxy()
 
     def __reset_proxy(self):
@@ -99,7 +100,12 @@ class VideoUploader:
             proxypatch.set_proxy(None)
             while True:
                 try:
-                    proxypatch.set_proxy(FreeProxy(rand=True).get())
+                    proxy = FreeProxy(rand=True).get()
+                    if proxy in self.__already_used_proxy:
+                        logging.warning("Proxy %s was already used during this session", proxy)
+                        continue
+                    self.__already_used_proxy.add(proxy)
+                    proxypatch.set_proxy(proxy)
                     break
                 except FreeProxyException as ex:
                     logging.warning("Probably connection error: %s, wait 1 minute", str(ex))
