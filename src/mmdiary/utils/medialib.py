@@ -120,7 +120,7 @@ class MediaLib:
         self.__root = os.path.expanduser(root)
 
         self.__supported_exts = []
-        for ext, tp in g_fileprop.EXT_TO_TYPE.items():
+        for ext, tp in g_fileprop.ext_to_type.items():
             if tp in (fileprop.AUDIO, fileprop.VIDEO):
                 self.__supported_exts.append(ext)
 
