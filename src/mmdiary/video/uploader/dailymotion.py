@@ -23,6 +23,8 @@ Please declare enviromnent variables before use:
 
 FILE_SIZE_LIMIT = 4 * 1024 * 1024 * 1024
 
+PROXY_REUSE_TTL = 60 * 30  # 30 minutes
+
 DAILYMOTION_EMBED_URL = "https://www.dailymotion.com/embed/video/"
 DAILYMOTION_METADATA_URL = "https://www.dailymotion.com/player/metadata/video/"
 
@@ -34,6 +36,22 @@ def generate_video_url(provider, pos=None):
     if pos is None:
         return url
     return url + f"&start={int(pos)}"
+
+
+class TimedSet:
+    def __init__(self, ttl):
+        self.__ttl = ttl
+        self.__items = {}
+
+    def add(self, key):
+        self.__items[key] = time.time()
+
+    def __contains__(self, key):
+        if key in self.__items:
+            if time.time() - self.__items[key] < self.__ttl:
+                return True
+            del self.__items[key]
+        return False
 
 
 class DailymotionAccounts:
@@ -92,7 +110,7 @@ class VideoUploader:
         if self.__use_proxy is None:
             self.__use_proxy = self.__accounts.count() > 1
 
-        self.__already_used_proxy = set()
+        self.__already_used_proxy = TimedSet(PROXY_REUSE_TTL)
         self.__reset_proxy()
 
     def __reset_proxy(self):
