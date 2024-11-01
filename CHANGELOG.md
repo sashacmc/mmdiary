@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.0 - UNRELEASED
+
+- Add mmdiary script: global initialization and batch mode
+- JSON cache leazy loading
+- Logging cleanup and confgiration by MMDIARY_LOGGING_LEVEL env variable
+- Catch token refresh exception
+- Add disable_date action
+- Add blacklisted video processing
+- Improve proxy usage
+
 ## 0.4.0 - 2024-06-02
 
 - Add Dailymotion uploader
