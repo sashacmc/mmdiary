@@ -41,6 +41,7 @@ class NotionUploader:
         api_key,
         audio_db_id,
         video_db_id,
+        *,
         force_update=False,
         dry_run=False,
     ):
@@ -196,7 +197,9 @@ class NotionUploader:
             ],
         }
 
-    def __add_row(self, db_id, title, date, source, processtime, icon, provider=None, account=None):
+    def __add_row(
+        self, db_id, *, title, date, source, processtime, icon, provider=None, account=None
+    ):
         properties = {
             "title": {"title": [{"text": {"content": title}}]},
             "Date": {"type": "date", "date": {"start": date}},
